@@ -7,6 +7,7 @@ export interface UseEventsParams {
   page?: number;
   limit?: number;
   search?: string;
+  includeAll?: boolean;
 }
 
 async function fetchEvents(params: UseEventsParams): Promise<PaginatedResult<Event>> {
@@ -20,9 +21,6 @@ async function fetchEvents(params: UseEventsParams): Promise<PaginatedResult<Eve
   return res.json();
 }
 
-// Mantém o comportamento antigo (limit=100, sem search) quando chamado sem
-// argumentos — não quebra o Painel Admin nem a Comunidade, que já usam
-// useEvents() assim hoje.
 export function useEvents(params: UseEventsParams = { limit: 100 }) {
   return useQuery({
     queryKey: ['events', params],

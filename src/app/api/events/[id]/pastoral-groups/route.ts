@@ -1,4 +1,4 @@
-// app/api/events/[id]/pastoral-groups/route.ts
+// src/app/api/events/[id]/pastoral-groups/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { apiFetch } from '@/lib/api';
 
@@ -9,7 +9,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-
   const body = await req.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });

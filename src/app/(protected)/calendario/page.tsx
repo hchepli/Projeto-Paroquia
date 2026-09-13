@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import MonthGrid from '@/components/ui/calendar/MonthGrid';
-import MassFormModal from '@/components/ui/forms/MassFormModal';
-import EventFormModal from '@/components/ui/forms/EventFormModal';
+import MassFormModal, { MassDto } from '@/components/ui/forms/MassFormModal';
+import EventFormModal, { EventDto } from '@/components/ui/forms/EventFormModal';
 import AgendaTimeline, { AgendaItem } from '@/components/ui/calendar/AgendaTimeline';
 import { getMonthLabel, getDaysInMonth, getFirstWeekdayOffset } from '@/lib/date/calendar';
 import { useCalendar } from '@/hooks/calendar/useCalendar';
@@ -21,14 +22,32 @@ function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-// mass -> verde, event -> roxo, mesma convenção do AGENDA_MOCK do Painel.
-function toAgendaItem(item: CalendarItem): AgendaItem {
+function toAgendaItem(item: CalendarItem): AgendaItem<CalendarItem> {
   return {
+    id: item.id,
+    entityType: item.type,
     time: formatTime(item.date),
     title: item.type === 'mass' ? 'Missa' : 'Evento',
     subtitle: item.title,
     color: item.type === 'mass' ? 'green' : 'purple',
+    raw: item,
   };
+}
+
+// Busca o registro completo (Mass ou Event) só quando o usuário clica num
+// item da agenda — CalendarItem não carrega os campos que o modal precisa
+// (location, notes, pastoralGroups, etc). ASSUMIDO: GET /masses/:id e
+// GET /events/:id existem e devolvem o objeto completo com `pastoralGroups`.
+async function fetchMassById(id: number): Promise<MassDto> {
+  const res = await fetch(`/api/masses/${id}`);
+  if (!res.ok) throw new Error('Erro ao buscar missa.');
+  return res.json();
+}
+
+async function fetchEventById(id: number): Promise<EventDto> {
+  const res = await fetch(`/api/events/${id}`);
+  if (!res.ok) throw new Error('Erro ao buscar evento.');
+  return res.json();
 }
 
 export default function CalendarioPage() {
@@ -36,9 +55,33 @@ export default function CalendarioPage() {
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
 
   const [openModal, setOpenModal] = useState<'mass' | 'event' | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const { start, end } = useMemo(() => getMonthRange(currentDate), [currentDate]);
   const { data: items, isLoading } = useCalendar(start, end);
+
+  const { data: editingMass, isFetching: loadingMass } = useQuery({
+    queryKey: ['masses', editingId],
+    queryFn: () => fetchMassById(editingId!),
+    enabled: openModal === 'mass' && editingId !== null,
+  });
+
+  const { data: editingEvent, isFetching: loadingEvent } = useQuery({
+    queryKey: ['events', editingId],
+    queryFn: () => fetchEventById(editingId!),
+    enabled: openModal === 'event' && editingId !== null,
+  });
+
+  function handleAgendaItemClick(item: AgendaItem<CalendarItem>) {
+    if (!item.id || !item.entityType) return;
+    setEditingId(item.id);
+    setOpenModal(item.entityType);
+  }
+
+  function handleCloseModal() {
+    setOpenModal(null);
+    setEditingId(null);
+  }
 
   function handlePrevMonth() {
     setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -105,12 +148,20 @@ export default function CalendarioPage() {
           <p className="mb-4 text-[14px] font-semibold text-gray-700">
             {selectedDay} de {getMonthLabel(currentDate)}
           </p>
-          <AgendaTimeline items={selectedDayItems} />
+          <AgendaTimeline items={selectedDayItems} onItemClick={handleAgendaItemClick} />
         </div>
       </div>
 
-      <MassFormModal open={openModal === 'mass'} onClose={() => setOpenModal(null)} />
-      <EventFormModal open={openModal === 'event'} onClose={() => setOpenModal(null)} />
+      <MassFormModal
+        open={openModal === 'mass'}
+        mass={editingId ? editingMass : null}
+        onClose={handleCloseModal}
+      />
+      <EventFormModal
+        open={openModal === 'event'}
+        event={editingId ? editingEvent : null}
+        onClose={handleCloseModal}
+      />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import MiniCalendar from '@/components/ui/calendar/MiniCalendar';
 import AgendaTimeline, { AgendaItem } from '@/components/ui/calendar/AgendaTimeline';
 
-interface CalendarSidebarProps {
+interface CalendarSidebarProps<TRaw = unknown> {
   monthLabel: string;
   daysInMonth: number;
   firstWeekdayOffset: number;
@@ -9,10 +9,11 @@ interface CalendarSidebarProps {
   onSelectDay: (day: number) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
-  agendaItems: AgendaItem[];
+  agendaItems: AgendaItem<TRaw>[];
+  onAgendaItemClick?: (item: AgendaItem<TRaw>) => void;
 }
 
-export default function CalendarSidebar({
+export default function CalendarSidebar<TRaw = unknown>({
   monthLabel,
   daysInMonth,
   firstWeekdayOffset,
@@ -21,7 +22,8 @@ export default function CalendarSidebar({
   onPrevMonth,
   onNextMonth,
   agendaItems,
-}: CalendarSidebarProps) {
+  onAgendaItemClick,
+}: CalendarSidebarProps<TRaw>) {
   return (
     <div className="flex flex-col justify-beetwen  gap-6 h-full overflow-y-auto">
       <MiniCalendar
@@ -35,7 +37,7 @@ export default function CalendarSidebar({
       />
 
       <div className="border-t border-gray-100 pt-4">
-        <AgendaTimeline items={agendaItems} />
+        <AgendaTimeline items={agendaItems} onItemClick={onAgendaItemClick} />
       </div>
     </div>
   );

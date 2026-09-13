@@ -1,12 +1,6 @@
+// src/hooks/photos/usePhotos.ts
 import { useQuery } from '@tanstack/react-query';
-
-interface Photo {
-  id: number;
-  albumId: number;
-  url: string;
-  isCover: boolean;
-  createdAt: string;
-}
+import { Photo } from '@/types/photos/photo';
 
 async function fetchPhotos(): Promise<Photo[]> {
   const res = await fetch('/api/photos');

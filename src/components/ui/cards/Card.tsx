@@ -7,6 +7,8 @@ interface CardProps {
   description?: string;
   badge?: string;
   badgeColor?: 'green' | 'red' | 'yellow' | 'blue';
+  onClick?: () => void;
+  active?: boolean;
 }
 
 const badgeColors: Record<NonNullable<CardProps['badgeColor']>, string> = {
@@ -23,9 +25,27 @@ export default function Card({
   description,
   badge,
   badgeColor = 'blue',
+  onClick,
+  active = false,
 }: CardProps) {
+  const isInteractive = Boolean(onClick);
+
   return (
-    <div className="flex flex-col gap-2 p-4 rounded-[16px] border border-[rgba(0,0,0,0.3)] w-full">
+    <div
+      onClick={onClick}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onKeyDown={
+        isInteractive
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') onClick?.();
+            }
+          : undefined
+      }
+      className={`flex flex-col gap-2 p-4 rounded-[16px] border w-full ${
+        isInteractive ? 'cursor-pointer transition-colors hover:bg-[rgba(0,0,0,0.02)]' : ''
+      } ${active ? 'border-[rgba(0,0,0,0.6)]' : 'border-[rgba(0,0,0,0.3)]'}`}
+    >
       <div className="flex justify-start items-center gap-2">
         <div className="w-6 h-6 rounded-sm flex justify-center items-center bg-[rgba(0,0,0,0.05)]">
           <Icon width={16} />

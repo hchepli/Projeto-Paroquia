@@ -89,12 +89,14 @@ export default function AnnouncementsTable({
           ))}
         </select>
 
-        <button
-          onClick={onViewAll}
-          className="flex shrink-0 items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.1)] px-3 py-2 text-sm font-medium text-[rgba(0,0,0,0.7)] hover:bg-gray-50"
-        >
-          Ver Todas <ArrowRight size={14} />
-        </button>
+        {onViewAll && (
+          <button
+            onClick={onViewAll}
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.1)] px-3 py-2 text-sm font-medium text-[rgba(0,0,0,0.7)] hover:bg-gray-50"
+          >
+            Ver Todas <ArrowRight size={14} />
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto">

@@ -1,18 +1,19 @@
-// src/app/(admin)/escalas/page.tsx
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, CheckCircle2, Users } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, Users } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
 import PastoralSwitcher from '@/components/ui/dropdowns/PastoralSwitcher';
 import ReportsDropdown from '@/components/ui/dropdowns/ReportsDropdown';
 import SchedulesTable from '@/components/ui/tables/SchedulesTable';
+import PendingSchedulesTable from '@/components/ui/tables/PendingSchedulesTable';
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import RegisterScheduleModal from '@/components/ui/forms/RegisterScheduleModal';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useSchedules } from '@/hooks/schedules/useSchedules';
 import { useSchedulesSummary } from '@/hooks/schedules/useSchedulesSummary';
+import { usePendingSchedules } from '@/hooks/schedules/usePendingSchedules';
 import { usePastoralGroups } from '@/hooks/pastoral-groups/usePastoralGroups';
 import { useMasses } from '@/hooks/masses/useMasses';
 import { useVolunteers } from '@/hooks/volunteers/useVolunteers';
@@ -29,6 +30,7 @@ export default function EscalasPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [openRegisterModal, setOpenRegisterModal] = useState(false);
+  const [showPending, setShowPending] = useState(false);
 
   const isCoordenador = currentUser?.role.name === COORDENADOR_ROLE;
   const effectivePastoralGroupId = isCoordenador ? undefined : (selectedPastoralGroupId ?? undefined);
@@ -42,7 +44,6 @@ export default function EscalasPage() {
   });
   const massesThisMonth = massesResult?.data ?? [];
 
-  // Tabela paginada (o que o usuário efetivamente navega)
   const { data, isLoading } = useSchedules({
     page,
     limit: 10,
@@ -50,8 +51,13 @@ export default function EscalasPage() {
     pastoralGroupId: effectivePastoralGroupId,
   });
 
-  // Resumo completo do mês (sem paginação), só pro card "Escalados".
   const { data: monthSchedules = [] } = useSchedulesSummary({
+    startDate: monthRange.startISO,
+    endDate: monthRange.endISO,
+    pastoralGroupId: effectivePastoralGroupId,
+  });
+
+  const { data: pendingItems = [], isLoading: pendingLoading } = usePendingSchedules({
     startDate: monthRange.startISO,
     endDate: monthRange.endISO,
     pastoralGroupId: effectivePastoralGroupId,
@@ -69,8 +75,6 @@ export default function EscalasPage() {
       ? `Escalas de ${pastoralGroups.find((pg) => pg.id === selectedPastoralGroupId)?.name ?? '—'}`
       : 'Escalas de Todas as Pastorais';
 
-  // Filtros do relatório exportado = mesmos filtros que a tabela está
-  // mostrando agora (mês corrente + pastoral selecionada + busca ativa).
   function buildExportQuery() {
     const query = new URLSearchParams();
     query.set('startDate', monthRange.startISO);
@@ -101,13 +105,24 @@ export default function EscalasPage() {
         actionsAdornment={<ReportsDropdown buildQuery={buildExportQuery} />}
       />
 
-      <div className="mt-8 grid grid-cols-3 gap-4">
+      <div className="mt-8 grid grid-cols-4 gap-4">
         <Card icon={CalendarDays} title="Missas do mês" value={massesThisMonth.length} />
         <Card icon={CheckCircle2} title="Escalados" value={assignmentsCount} />
         <Card icon={Users} title="Membros Ativos" value={volunteers.length} />
-        {/* Card "Pendentes" fica de fora — conceito ainda não existe
-            no schema (Schedule/ScheduleAssignment não têm status). */}
+        <Card
+          icon={AlertCircle}
+          title="Pendentes"
+          value={pendingItems.length}
+          onClick={() => setShowPending((prev) => !prev)}
+          active={showPending}
+        />
       </div>
+
+      {showPending && (
+        <div className="mt-4">
+          <PendingSchedulesTable items={pendingItems} isLoading={pendingLoading} />
+        </div>
+      )}
 
       <div className="my-6">
         <SchedulesTable

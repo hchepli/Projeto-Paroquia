@@ -1,14 +1,19 @@
 export type AgendaItemColor = 'green' | 'purple' | 'yellow' | 'blue';
+export type AgendaItemEntityType = 'mass' | 'event';
 
-export interface AgendaItem {
+export interface AgendaItem<TRaw = unknown> {
+  id?: number;                  // ausente em slots vazios da timeline
+  entityType?: AgendaItemEntityType;
   time: string;      // "6:00"
   title: string;      // "Missa"
   subtitle?: string;  // "6h00 às 7h30"
   color: AgendaItemColor;
+  raw?: TRaw;         // registro original (Mass ou Event) vindo da API
 }
 
-interface AgendaTimelineProps {
-  items: AgendaItem[];
+interface AgendaTimelineProps<TRaw = unknown> {
+  items: AgendaItem<TRaw>[];
+  onItemClick?: (item: AgendaItem<TRaw>) => void;
 }
 
 const COLOR_MAP: Record<
@@ -21,7 +26,10 @@ const COLOR_MAP: Record<
   blue:   { dot: 'bg-[#1976D2]', line: 'bg-[#1976D2]', border: 'border-[#1976D2]', chip: 'bg-[#1976D2]/30' },
 };
 
-export default function AgendaTimeline({ items }: AgendaTimelineProps) {
+export default function AgendaTimeline<TRaw = unknown>({
+  items,
+  onItemClick,
+}: AgendaTimelineProps<TRaw>) {
   if (items.length === 0) {
     return (
       <p className="text-sm text-gray-400 text-center py-8">
@@ -35,6 +43,7 @@ export default function AgendaTimeline({ items }: AgendaTimelineProps) {
       {items.map((item, i) => {
         const colors = COLOR_MAP[item.color];
         const isEmpty = !item.title;
+        const clickable = !isEmpty && Boolean(onItemClick) && Boolean(item.raw);
 
         return (
           <div key={i} className="flex items-center gap-0">
@@ -49,8 +58,13 @@ export default function AgendaTimeline({ items }: AgendaTimelineProps) {
             ) : (
               <>
                 <span className={`h-px w-4 shrink-0 ${colors.line}`} />
-                <div
-                  className={`flex items-center gap-2 rounded-xl border bg-white p-1 min-w-[150px] ${colors.border}`}
+                <button
+                  type="button"
+                  disabled={!clickable}
+                  onClick={() => clickable && onItemClick?.(item)}
+                  className={`flex items-center gap-2 rounded-xl border bg-white p-1 min-w-[150px] text-left ${colors.border} ${
+                    clickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : 'cursor-default'
+                  }`}
                 >
                   <span className={`h-8 w-8 shrink-0 rounded-lg ${colors.chip}`} />
                   <div className="flex flex-col">
@@ -63,7 +77,7 @@ export default function AgendaTimeline({ items }: AgendaTimelineProps) {
                       </p>
                     )}
                   </div>
-                </div>
+                </button>
                 <span className={`h-px flex-1 ${colors.line}`} />
               </>
             )}
