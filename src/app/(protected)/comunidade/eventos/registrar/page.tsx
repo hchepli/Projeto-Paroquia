@@ -70,7 +70,7 @@ export default function CriarEventoPage() {
 
   return (
     <>
-      <Header title="Novo Evento" description="Cadastre um novo evento da paróquia." />
+      <Header title="Novo Evento" description="Cadastre um novo evento da paróquia." onBack={() => router.back()} />
 
       <div className="py-6">
         <form onSubmit={handleSubmit} className="space-y-6">

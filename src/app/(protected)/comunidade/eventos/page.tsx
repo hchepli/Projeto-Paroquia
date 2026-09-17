@@ -6,11 +6,19 @@ import { useRouter } from 'next/navigation';
 import { CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
-import TableEvents from '@/components/ui/tables/TableEvents';
+import GenericTable, { GenericTableColumn, GenericTableAction } from '@/components/ui/tables/GenericTable';
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import { useEvents } from '@/hooks/events/useEvents';
 import { useDeleteEvent } from '@/hooks/events/useDeleteEvent';
 import { Event } from '@/types/events/events';
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
 
 export default function EventosPage() {
   const router = useRouter();
@@ -37,12 +45,61 @@ export default function EventosPage() {
     deleteEvent.mutate(event.id);
   }
 
+  const columns: GenericTableColumn<Event>[] = [
+    {
+      key: 'name',
+      label: 'Nome',
+      render: (event) => <span className="font-medium text-gray-800">{event.name}</span>,
+    },
+    {
+      key: 'date',
+      label: 'Data',
+      render: (event) => formatDate(event.startDate),
+    },
+    {
+      key: 'location',
+      label: 'Local',
+      render: (event) => event.location,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (event) => (
+        <span
+          className={`rounded px-2 py-0.5 text-xs font-medium ${
+            event.status === 'ACTIVE' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+          }`}
+        >
+          {event.status === 'ACTIVE' ? 'Ativo' : 'Cancelado'}
+        </span>
+      ),
+    },
+  ];
+
+  const actions: GenericTableAction<Event>[] = [
+    {
+      label: 'Editar',
+      onClick: (event) => router.push(`/comunidade/eventos/${event.id}`),
+    },
+    {
+      label: 'Confirmações',
+      onClick: (event) => router.push(`/comunidade/eventos/${event.id}/confirmacoes`),
+    },
+    {
+      label: 'Remover',
+      onClick: handleRemove,
+      variant: 'danger',
+      disabled: () => deleteEvent.isPending,
+    },
+  ];
+
   return (
     <>
       <Header
         title="Eventos"
         description="Gerencie os eventos da paróquia."
         actions={[{ label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') }]}
+        onBack={() => router.back()}
       />
 
       <div className="mt-8 grid grid-cols-3 gap-4">
@@ -58,16 +115,20 @@ export default function EventosPage() {
       </div>
 
       <div className="my-6">
-        <TableEvents
+        <GenericTable
+          columns={columns}
           items={filteredItems}
+          rowKey={(event) => event.id}
+          actions={actions}
           isLoading={isLoading}
+          loadingMessage="Carregando eventos..."
+          emptyMessage="Nenhum evento encontrado."
           search={search}
           onSearchChange={(value) => {
             setSearch(value);
             setPage(1);
           }}
-          onRemove={handleRemove}
-          isRemoving={deleteEvent.isPending}
+          searchPlaceholder="Buscar por nome..."
         />
         <PaginationControls
           page={data?.page ?? 1}

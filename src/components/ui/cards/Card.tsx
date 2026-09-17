@@ -1,4 +1,5 @@
-import { LucideIcon } from 'lucide-react';
+// src/components/ui/cards/Card.tsx
+import { LucideIcon, ChevronRight } from 'lucide-react';
 
 interface CardProps {
   icon: LucideIcon;
@@ -42,10 +43,17 @@ export default function Card({
             }
           : undefined
       }
-      className={`flex flex-col gap-2 p-4 rounded-[16px] border w-full ${
+      className={`relative flex flex-col gap-2 p-4 rounded-[16px] border w-full ${
         isInteractive ? 'cursor-pointer transition-colors hover:bg-[rgba(0,0,0,0.02)]' : ''
       } ${active ? 'border-[rgba(0,0,0,0.6)]' : 'border-[rgba(0,0,0,0.3)]'}`}
     >
+      {isInteractive && (
+        <span className="absolute top-4 right-4 flex items-center gap-0.5 text-xs font-medium text-[rgba(0,0,0,0.5)] whitespace-nowrap">
+          Ver Mais
+          <ChevronRight width={14} />
+        </span>
+      )}
+
       <div className="flex justify-start items-center gap-2">
         <div className="w-6 h-6 rounded-sm flex justify-center items-center bg-[rgba(0,0,0,0.05)]">
           <Icon width={16} />
@@ -55,14 +63,16 @@ export default function Card({
 
       <div className="flex justify-between items-center w-full gap-3">
         <h5 className="font-medium text-4xl">{value}</h5>
-        <div className="w-[62px] h-[62px] rounded-full flex justify-center items-center border border-[rgba(0,0,0,0.3)]">
+        <div className="w-[62px] h-[62px] rounded-full flex justify-center items-center border border-[rgba(0,0,0,0.3)] shrink-0">
           <Icon width={28} />
         </div>
       </div>
 
-      <div className="flex justify-start items-center gap-2">
+      <div className="flex justify-start items-center gap-2 min-h-[24px]">
         {badge ? (
-          <span className={`text-xs font-medium px-2 py-1 rounded-full text-[rgba(0,0,0,0.8)] ${badgeColors[badgeColor]}`}>
+          <span
+            className={`text-xs font-medium px-2 py-1 rounded-full text-[rgba(0,0,0,0.8)] ${badgeColors[badgeColor]}`}
+          >
             {badge}
           </span>
         ) : description ? (

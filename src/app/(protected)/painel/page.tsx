@@ -2,6 +2,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, CheckCircle2, Ticket, AlertTriangle, EyeOff, Images } from 'lucide-react';
 import Header from '@/components/layout/Header';
@@ -87,6 +88,8 @@ async function fetchEventById(id: number): Promise<EventDto> {
 }
 
 export default function PainelPage() {
+  const router = useRouter();
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
 
@@ -199,8 +202,8 @@ export default function PainelPage() {
         title="Painel Admin"
         description="Seja Bem Vindo ao Painel Administrativo da Paróquia!"
         actions={[
-          { label: 'Nova Missa', onClick: () => setOpenModal('mass') },
-          { label: 'Criar Evento', onClick: () => setOpenModal('event') },
+          { label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') },
+          { label: 'Criar Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
         ]}
       />
 
@@ -218,6 +221,7 @@ export default function PainelPage() {
                   ? massesToday.map((m) => formatTime(m.dateTime)).join(' · ')
                   : 'Nenhuma missa hoje'
               }
+              onClick={() => router.push('/calendario')}
             />
             <Card
               icon={CheckCircle2}
@@ -225,18 +229,21 @@ export default function PainelPage() {
               value={monthSchedules.length}
               badge={pendingItems.length > 0 ? `${pendingItems.length} pendente(s)` : undefined}
               badgeColor="red"
+              onClick={() => router.push('/escalas')}
             />
             <Card
               icon={Ticket}
               title="Próximos eventos"
               value={eventsLoading ? '—' : upcomingEvents.length}
               description="Nos próximos 30 dias"
+              onClick={() => router.push('/comunidade/eventos')}
             />
             <Card
               icon={AlertTriangle}
               title="Missas sem Pastoral"
               value={massesWithoutPastoralCount}
               description="Este mês"
+              onClick={() => router.push('/calendario')}
             />
             <Card
               icon={EyeOff}
@@ -244,12 +251,14 @@ export default function PainelPage() {
               value={draftAnnouncementsCount}
               badge="Aguardando revisão"
               badgeColor="yellow"
+              onClick={() => router.push('/comunidade/comunicados')}
             />
             <Card
               icon={Images}
               title="Fotos na galeria"
               value={photosLast30Days}
               description="Nos últimos 30 dias"
+              onClick={() => router.push('/comunidade/albuns')}
             />
           </div>
 

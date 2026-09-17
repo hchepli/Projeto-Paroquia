@@ -109,7 +109,7 @@ export default function CriarMissaPage() {
 
   return (
     <>
-      <Header title="Nova Missa" description="Cadastre uma missa avulsa ou recorrente." />
+      <Header title="Nova Missa" description="Cadastre uma missa avulsa ou recorrente." onBack={() => router.back()} />
 
       <div className="py-6">
         <form onSubmit={handleSubmit} className="space-y-6">

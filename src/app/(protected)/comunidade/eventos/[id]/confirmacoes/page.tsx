@@ -43,6 +43,7 @@ export default function ConfirmacoesPresencaPage() {
         actions={[
           { label: 'Voltar para o evento', onClick: () => router.push(`/comunidade/eventos/${eventId}`) },
         ]}
+        onBack={() => router.back()}
       />
 
       <div className="mt-6 rounded-lg border border-gray-200 bg-white">

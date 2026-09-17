@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle, CalendarDays, CheckCircle2, Users } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
@@ -9,7 +10,6 @@ import ReportsDropdown from '@/components/ui/dropdowns/ReportsDropdown';
 import SchedulesTable from '@/components/ui/tables/SchedulesTable';
 import PendingSchedulesTable from '@/components/ui/tables/PendingSchedulesTable';
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
-import RegisterScheduleModal from '@/components/ui/forms/RegisterScheduleModal';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useSchedules } from '@/hooks/schedules/useSchedules';
 import { useSchedulesSummary } from '@/hooks/schedules/useSchedulesSummary';
@@ -22,6 +22,7 @@ import { getCurrentMonthRange } from '@/lib/date/month-range';
 const COORDENADOR_ROLE = 'Coordenador de Pastoral';
 
 export default function EscalasPage() {
+  const router = useRouter();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const { data: pastoralGroups = [] } = usePastoralGroups();
   const { data: volunteers = [] } = useVolunteers();
@@ -29,7 +30,6 @@ export default function EscalasPage() {
   const [selectedPastoralGroupId, setSelectedPastoralGroupId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [openRegisterModal, setOpenRegisterModal] = useState(false);
   const [showPending, setShowPending] = useState(false);
 
   const isCoordenador = currentUser?.role.name === COORDENADOR_ROLE;
@@ -101,7 +101,7 @@ export default function EscalasPage() {
             />
           ) : undefined
         }
-        actions={[{ label: 'Registrar Escala', onClick: () => setOpenRegisterModal(true) }]}
+        actions={[{ label: 'Registrar Escala', onClick: () => router.push('/escalas/registrar') }]}
         actionsAdornment={<ReportsDropdown buildQuery={buildExportQuery} />}
       />
 
@@ -141,11 +141,6 @@ export default function EscalasPage() {
           onPageChange={setPage}
         />
       </div>
-
-      <RegisterScheduleModal
-        open={openRegisterModal}
-        onClose={() => setOpenRegisterModal(false)}
-      />
     </>
   );
 }

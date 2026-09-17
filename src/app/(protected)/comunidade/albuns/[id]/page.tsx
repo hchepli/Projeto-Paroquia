@@ -106,6 +106,7 @@ export default function AlbumDetailPage() {
           },
           { label: 'Voltar para Álbuns', onClick: () => router.push('/comunidade/albuns') },
         ]}
+        onBack={() => router.back()}
       />
 
       {isEditing && (

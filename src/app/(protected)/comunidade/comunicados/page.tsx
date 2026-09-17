@@ -1,15 +1,20 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, CheckCircle2, EyeOff, Newspaper } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowRight, CalendarDays, CheckCircle2, EyeOff, Newspaper } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
-import AnnouncementsTable from '@/components/ui/tables/AnnouncementsTable';
+import GenericTable, {
+  GenericTableColumn,
+  GenericTableAction,
+  GenericTableFilter,
+} from '@/components/ui/tables/GenericTable';
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import AnnouncementFormModal from '@/components/ui/forms/AnnouncementFormModal';
 import { useAnnouncements } from '@/hooks/announcements/useAnnouncements';
 import { Announcement, AnnouncementStatus } from '@/types/announcements/announcement';
+import { useRouter } from 'next/navigation';
 
 type StatusFilter = 'ALL' | AnnouncementStatus;
 
@@ -31,14 +36,26 @@ function isThisMonth(dateStr: string): boolean {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 }
 
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('pt-BR');
+}
+
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'Todas' },
+  { value: 'PUBLISHED', label: 'Publicados' },
+  { value: 'DRAFT', label: 'Ocultos' },
+];
+
 export default function ComunicadosPage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [page, setPage] = useState(1);
   const [openFormModal, setOpenFormModal] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const router = useRouter();
 
-  // Tabela paginada/filtrada (o que o usuário está navegando de fato).
   const { data: tableData, isLoading: tableLoading } = useAnnouncements({
     search,
     page,
@@ -46,16 +63,10 @@ export default function ComunicadosPage() {
     status: statusFilter === 'ALL' ? undefined : statusFilter,
   });
 
-  // Consultas leves pros cards de resumo — independentes da paginação/filtro
-  // da tabela (mesmo padrão de Escalas: cards mostram o todo, tabela mostra
-  // a fatia filtrada).
   const { data: totalData } = useAnnouncements({ limit: 1 });
   const { data: publishedData } = useAnnouncements({ status: 'PUBLISHED', limit: 1 });
   const { data: draftData } = useAnnouncements({ status: 'DRAFT', limit: 1 });
 
-  // NOTA: não existe endpoint dedicado de "criados este mês" — pego os 100
-  // mais recentes e filtro no client. Se o volume de comunicados crescer
-  // muito, vale migrar isso pra um filtro de data no backend.
   const { data: recentData } = useAnnouncements({ limit: 100 });
   const thisMonthCount = useMemo(
     () => (recentData?.data ?? []).filter((a) => isThisMonth(a.createdAt)).length,
@@ -107,12 +118,77 @@ export default function ComunicadosPage() {
     setPage(1);
   }
 
+  // Movido de dentro da antiga AnnouncementsTable pra cá — a mutation não
+  // deve viver num componente de apresentação (achado do Bloco A/Dia 1).
+  async function handleToggleStatus(announcement: Announcement) {
+    const nextStatus = announcement.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
+    setTogglingId(announcement.id);
+    try {
+      const res = await fetch(`/api/announcements/${announcement.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar status.');
+      await queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    } catch {
+      // Erro silencioso por ora — sem componente de toast definido ainda.
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  const columns: GenericTableColumn<Announcement>[] = [
+    {
+      key: 'date',
+      label: 'Data',
+      render: (item) => formatDate(item.createdAt),
+    },
+    {
+      key: 'title',
+      label: 'Aviso',
+      render: (item) => item.title,
+    },
+    {
+      key: 'category',
+      label: 'Tipo',
+      render: (item) => (
+        <span className="rounded-full bg-[rgba(0,0,0,0.05)] px-2 py-1 text-xs font-medium text-[rgba(0,0,0,0.7)]">
+          {item.categoryId ? categoryNameById[item.categoryId] ?? '—' : 'Sem categoria'}
+        </span>
+      ),
+    },
+  ];
+
+  const actions: GenericTableAction<Announcement>[] = [
+    {
+      label: 'Editar',
+      onClick: handleEdit,
+    },
+    {
+      label: (item) => (item.status === 'PUBLISHED' ? 'Ocultar' : 'Publicar'),
+      onClick: handleToggleStatus,
+      disabled: (item) => togglingId === item.id,
+    },
+  ];
+
+  const filters: GenericTableFilter[] = [
+    {
+      key: 'status',
+      placeholder: 'Status',
+      value: statusFilter,
+      onChange: (value) => handleStatusFilterChange(value as StatusFilter),
+      options: STATUS_OPTIONS,
+    },
+  ];
+
   return (
     <>
       <Header
         title="Comunicados"
         description="Gerencie os avisos e notícias da paróquia"
         actions={[{ label: 'Registrar Comunicado', onClick: handleNew }]}
+        onBack={() => router.back()}
       />
 
       <div className="mt-8 grid grid-cols-4 gap-4">
@@ -129,15 +205,22 @@ export default function ComunicadosPage() {
       </div>
 
       <div className="my-6">
-        <AnnouncementsTable
+        <GenericTable
+          columns={columns}
           items={items}
+          rowKey={(item) => item.id}
+          actions={actions}
           isLoading={tableLoading}
-          categoryNameById={categoryNameById}
-          onEdit={handleEdit}
+          emptyMessage="Nenhum comunicado encontrado."
           search={search}
           onSearchChange={handleSearchChange}
-          statusFilter={statusFilter}
-          onStatusFilterChange={handleStatusFilterChange}
+          searchPlaceholder="Buscar aviso..."
+          filters={filters}
+          headerSlot={
+            <button className="flex shrink-0 items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.1)] px-3 py-2 text-sm font-medium text-[rgba(0,0,0,0.7)] hover:bg-gray-50">
+              Ver Todas <ArrowRight size={14} />
+            </button>
+          }
         />
         <PaginationControls
           page={tableData?.page ?? 1}

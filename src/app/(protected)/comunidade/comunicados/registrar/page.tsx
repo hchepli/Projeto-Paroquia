@@ -8,6 +8,7 @@ import TextareaInput from '@/components/ui/inputs/TextareaInput';
 import SelectInput from '@/components/ui/inputs/SelectInput';
 import ImageInput from '@/components/ui/inputs/ImageInput';
 import FormActions from '@/components/ui/buttons/FormActions';
+import { useRouter } from 'next/navigation';
 
 interface Category {
   id: number;
@@ -37,6 +38,7 @@ export default function RegistrarComunicadoPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
 
   function handleCancel() {
     // TODO: confirmar estratégia de "voltar" (Bloco 9, Dia 1 do roadmap)
@@ -90,6 +92,7 @@ export default function RegistrarComunicadoPage() {
       <Header
         title="Registrar Comunicado"
         description="Crie um novo comunicado para a comunidade."
+        onBack={() => router.back()}
       />
 
       <div className="py-6">

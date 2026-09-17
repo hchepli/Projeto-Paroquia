@@ -44,7 +44,7 @@ export default function CriarAlbumPage() {
 
   return (
     <>
-      <Header title="Novo Álbum" description="Crie um álbum para depois adicionar as fotos." />
+      <Header title="Novo Álbum" description="Crie um álbum para depois adicionar as fotos." onBack={() => router.back()} />
 
       <div className="py-6">
         <form onSubmit={handleSubmit} className="space-y-6">

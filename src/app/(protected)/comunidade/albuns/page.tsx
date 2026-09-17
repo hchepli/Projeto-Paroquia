@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, FolderOpen, Images, Link2 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
-import AlbumsTable from '@/components/ui/tables/AlbumsTable';
+import GenericTable, { GenericTableColumn, GenericTableAction } from '@/components/ui/tables/GenericTable';
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import { useAlbums } from '@/hooks/albums/useAlbums';
 import { usePhotos } from '@/hooks/photos/usePhotos';
@@ -62,12 +62,64 @@ export default function AlbunsPage() {
     deleteAlbum.mutate(album.id);
   }
 
+  const columns: GenericTableColumn<Album>[] = [
+    {
+      key: 'title',
+      label: 'Título',
+      render: (album) => <span className="font-medium text-gray-800">{album.title}</span>,
+    },
+    {
+      key: 'event',
+      label: 'Evento vinculado',
+      render: (album) => (album.eventId ? `Evento #${album.eventId}` : 'Avulso'),
+    },
+    {
+      key: 'photos',
+      label: 'Fotos',
+      render: (album) => (photosByAlbum.get(album.id) ?? []).length,
+    },
+    {
+      key: 'cover',
+      label: 'Capa',
+      render: (album) => {
+        const cover = (photosByAlbum.get(album.id) ?? []).find((p) => p.isCover);
+        if (!cover) return <span className="text-xs text-amber-600">Sem capa</span>;
+        return (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cover.url}
+            alt={`Capa do álbum ${album.title}`}
+            className="h-8 w-8 rounded object-cover"
+          />
+        );
+      },
+    },
+  ];
+
+  const actions: GenericTableAction<Album>[] = [
+    {
+      label: 'Ver fotos',
+      onClick: (album) => router.push(`/comunidade/albuns/${album.id}`),
+    },
+    {
+      label: 'Editar',
+      onClick: (album) => router.push(`/comunidade/albuns/${album.id}?edit=1`),
+    },
+    {
+      label: 'Remover',
+      onClick: handleRemove,
+      variant: 'danger',
+      disabled: () => deleteAlbum.isPending,
+    },
+  ];
+
   return (
     <>
       <Header
         title="Galeria — Álbuns"
         description="Gerencie os álbuns de fotos da paróquia."
         actions={[{ label: 'Novo Álbum', onClick: () => router.push('/comunidade/albuns/registrar') }]}
+        onBack={() => router.back()}
       />
 
       <div className="mt-8 grid grid-cols-4 gap-4">
@@ -87,17 +139,20 @@ export default function AlbunsPage() {
       </div>
 
       <div className="my-6">
-        <AlbumsTable
+        <GenericTable
+          columns={columns}
           items={paginatedAlbums}
-          photosByAlbum={photosByAlbum}
+          rowKey={(album) => album.id}
+          actions={actions}
           isLoading={albumsLoading || photosLoading}
+          loadingMessage="Carregando álbuns..."
+          emptyMessage="Nenhum álbum encontrado."
           search={search}
           onSearchChange={(value) => {
             setSearch(value);
             setPage(1);
           }}
-          onRemove={handleRemove}
-          isRemoving={deleteAlbum.isPending}
+          searchPlaceholder="Buscar por título..."
         />
         <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Header from '@/components/layout/Header';
@@ -11,6 +12,7 @@ import AgendaTimeline, { AgendaItem } from '@/components/ui/calendar/AgendaTimel
 import { getMonthLabel, getDaysInMonth, getFirstWeekdayOffset } from '@/lib/date/calendar';
 import { useCalendar } from '@/hooks/calendar/useCalendar';
 import { CalendarItem } from '@/types/calendar/calendar-item';
+
 
 function getMonthRange(date: Date) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
@@ -51,6 +53,7 @@ async function fetchEventById(id: number): Promise<EventDto> {
 }
 
 export default function CalendarioPage() {
+  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
 
@@ -107,8 +110,8 @@ export default function CalendarioPage() {
         title="Calendário"
         description="Gerencie todos os eventos e missas da paróquia!"
         actions={[
-          { label: 'Nova Missa', onClick: () => setOpenModal('mass') },
-          { label: 'Novo Evento', onClick: () => setOpenModal('event') },
+          { label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') },
+          { label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
         ]}
       />
 

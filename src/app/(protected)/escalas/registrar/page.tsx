@@ -136,7 +136,7 @@ export default function CriarEscalaPage() {
 
     return (
         <>
-            <Header title="Registrar Escala" description="Organize as atribuições de uma Missa ou Evento." />
+            <Header title="Registrar Escala" description="Organize as atribuições de uma Missa ou Evento." onBack={() => router.back()} />
 
             <div className="py-6">
                 <form onSubmit={handleSubmit} className="space-y-6">

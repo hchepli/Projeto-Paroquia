@@ -11,9 +11,6 @@ import CommunityContentTable, {
   CommunityContentType,
 } from '@/components/ui/tables/CommunityContentTable';
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
-import AnnouncementFormModal from '@/components/ui/forms/AnnouncementFormModal';
-import AlbumFormModal from '@/components/ui/forms/AlbumFormModal';
-import EventFormModal from '@/components/ui/forms/EventFormModal';
 import { useAnnouncements } from '@/hooks/announcements/useAnnouncements';
 import { useEvents } from '@/hooks/events/useEvents';
 import { useAlbums } from '@/hooks/albums/useAlbums';
@@ -66,9 +63,6 @@ export default function ComunidadePage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [page, setPage] = useState(1);
-  const [openAnnouncementModal, setOpenAnnouncementModal] = useState(false);
-  const [openAlbumModal, setOpenAlbumModal] = useState(false);
-  const [openEventModal, setOpenEventModal] = useState(false);
 
   // Contagens dos cards do topo — consultas dedicadas (status específico),
   // independentes da lista "todos" usada na tabela genérica abaixo.
@@ -173,9 +167,9 @@ export default function ComunidadePage() {
         title="Comunidade"
         description="Gerencie o conteúdo do site da paróquia"
         actions={[
-          { label: 'Novo Comunicado', onClick: () => setOpenAnnouncementModal(true) },
-          { label: 'Novo Evento', onClick: () => setOpenEventModal(true) },
-          { label: 'Novo Álbum', onClick: () => setOpenAlbumModal(true) },
+          { label: 'Novo Comunicado', onClick: () => router.push('/comunidade/comunicados/registrar') },
+          { label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
+          { label: 'Novo Álbum', onClick: () => router.push('/comunidade/albuns/registrar') },
         ]}
       />
 
@@ -230,13 +224,6 @@ export default function ComunidadePage() {
         />
         <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
-
-      <AnnouncementFormModal
-        open={openAnnouncementModal}
-        onClose={() => setOpenAnnouncementModal(false)}
-      />
-      <AlbumFormModal open={openAlbumModal} onClose={() => setOpenAlbumModal(false)} />
-      <EventFormModal open={openEventModal} onClose={() => setOpenEventModal(false)} />
     </>
   );
 }

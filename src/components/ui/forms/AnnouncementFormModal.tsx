@@ -1,12 +1,14 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/ui/modals/Modal';
+import { Announcement } from '@/types/announcements/announcement';
 
 interface AnnouncementFormModalProps {
   open: boolean;
   onClose: () => void;
+  announcement?: Announcement;
 }
 
 interface Category {
@@ -21,8 +23,13 @@ async function fetchCategories(): Promise<Category[]> {
   return response.json();
 }
 
-export default function AnnouncementFormModal({ open, onClose }: AnnouncementFormModalProps) {
+export default function AnnouncementFormModal({
+  open,
+  onClose,
+  announcement,
+}: AnnouncementFormModalProps) {
   const queryClient = useQueryClient();
+  const isEditing = Boolean(announcement);
 
   const { data: categories } = useQuery({
     queryKey: ['categories'],
@@ -41,17 +48,29 @@ export default function AnnouncementFormModal({ open, onClose }: AnnouncementFor
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  function resetForm() {
-    setTitle('');
-    setContent('');
-    setCategoryId('');
-    setStatus('PUBLISHED');
-    setImageUrl('');
+  // Sempre que o modal abrir (seja pra criar ou editar), sincroniza o form
+  // com o registro recebido — ou limpa, se for criação.
+  useEffect(() => {
+    if (!open) return;
+
+    if (announcement) {
+      setTitle(announcement.title);
+      setContent(announcement.content);
+      setCategoryId(announcement.categoryId ? String(announcement.categoryId) : '');
+      setStatus(announcement.status);
+      setImageUrl(announcement.imageUrl ?? '');
+    } else {
+      setTitle('');
+      setContent('');
+      setCategoryId('');
+      setStatus('PUBLISHED');
+      setImageUrl('');
+    }
     setError(null);
-  }
+  }, [open, announcement]);
 
   function handleClose() {
-    resetForm();
+    setError(null);
     onClose();
   }
 
@@ -66,8 +85,11 @@ export default function AnnouncementFormModal({ open, onClose }: AnnouncementFor
 
     setSubmitting(true);
     try {
-      const response = await fetch('/api/announcements', {
-        method: 'POST',
+      const url = isEditing ? `/api/announcements/${announcement!.id}` : '/api/announcements';
+      const method = isEditing ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
@@ -81,20 +103,22 @@ export default function AnnouncementFormModal({ open, onClose }: AnnouncementFor
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.message ?? 'Erro ao criar comunicado.');
+        throw new Error(body?.message ?? `Erro ao ${isEditing ? 'atualizar' : 'criar'} comunicado.`);
       }
 
       await queryClient.invalidateQueries({ queryKey: ['announcements'] });
       handleClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar comunicado.');
+      setError(
+        err instanceof Error ? err.message : `Erro ao ${isEditing ? 'atualizar' : 'criar'} comunicado.`,
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="Novo Comunicado">
+    <Modal open={open} onClose={handleClose} title={isEditing ? 'Editar Comunicado' : 'Novo Comunicado'}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label className="text-[13px] font-medium text-gray-700">Título</label>
@@ -169,7 +193,7 @@ export default function AnnouncementFormModal({ open, onClose }: AnnouncementFor
             disabled={submitting}
             className="rounded-lg bg-[#701513] px-4 py-2 text-sm font-medium text-white hover:bg-[#5a1010] disabled:opacity-50"
           >
-            {submitting ? 'Salvando...' : 'Criar Comunicado'}
+            {submitting ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Criar Comunicado'}
           </button>
         </div>
       </form>

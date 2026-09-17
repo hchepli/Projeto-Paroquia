@@ -101,6 +101,7 @@ export default function EventoDetailPage() {
           },
           { label: 'Voltar para Eventos', onClick: () => router.push('/comunidade/eventos') },
         ]}
+        onBack={() => router.back()}
       />
 
       <div className="mt-6 max-w-lg space-y-4">
