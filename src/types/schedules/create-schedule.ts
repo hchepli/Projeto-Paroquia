@@ -1,4 +1,3 @@
-// src/types/schedules/create-schedule.ts
 export interface CreateScheduleAssignmentInput {
   volunteerId: number;
   role: string;
@@ -7,5 +6,6 @@ export interface CreateScheduleAssignmentInput {
 export interface CreateScheduleInput {
   massId?: number;
   eventId?: number;
+  pastoralGroupId?: number;
   assignments: CreateScheduleAssignmentInput[];
 }

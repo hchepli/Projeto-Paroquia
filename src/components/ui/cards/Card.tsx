@@ -1,5 +1,5 @@
 // src/components/ui/cards/Card.tsx
-import { LucideIcon, ChevronRight } from 'lucide-react';
+import { LucideIcon, ArrowUpRight  } from 'lucide-react';
 
 interface CardProps {
   icon: LucideIcon;
@@ -50,7 +50,7 @@ export default function Card({
       {isInteractive && (
         <span className="absolute top-4 right-4 flex items-center gap-0.5 text-xs font-medium text-[rgba(0,0,0,0.5)] whitespace-nowrap">
           Ver Mais
-          <ChevronRight width={14} />
+          <ArrowUpRight  width={14} />
         </span>
       )}
 

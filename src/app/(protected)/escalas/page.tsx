@@ -12,10 +12,8 @@ import PendingSchedulesTable from '@/components/ui/tables/PendingSchedulesTable'
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import { useCurrentUser } from '@/hooks/auth/useCurrentUser';
 import { useSchedules } from '@/hooks/schedules/useSchedules';
-import { useSchedulesSummary } from '@/hooks/schedules/useSchedulesSummary';
-import { usePendingSchedules } from '@/hooks/schedules/usePendingSchedules';
+import { useCoverage } from '@/hooks/schedules/useCoverage';
 import { usePastoralGroups } from '@/hooks/pastoral-groups/usePastoralGroups';
-import { useMasses } from '@/hooks/masses/useMasses';
 import { useVolunteers } from '@/hooks/volunteers/useVolunteers';
 import { getCurrentMonthRange } from '@/lib/date/month-range';
 
@@ -37,13 +35,6 @@ export default function EscalasPage() {
 
   const monthRange = getCurrentMonthRange();
 
-  const { data: massesResult } = useMasses({
-    startDate: monthRange.startISO,
-    endDate: monthRange.endISO,
-    limit: 100,
-  });
-  const massesThisMonth = massesResult?.data ?? [];
-
   const { data, isLoading } = useSchedules({
     page,
     limit: 10,
@@ -51,19 +42,24 @@ export default function EscalasPage() {
     pastoralGroupId: effectivePastoralGroupId,
   });
 
-  const { data: monthSchedules = [] } = useSchedulesSummary({
+  const { data: coverage = [], isLoading: coverageLoading } = useCoverage({
     startDate: monthRange.startISO,
     endDate: monthRange.endISO,
     pastoralGroupId: effectivePastoralGroupId,
   });
 
-  const { data: pendingItems = [], isLoading: pendingLoading } = usePendingSchedules({
-    startDate: monthRange.startISO,
-    endDate: monthRange.endISO,
-    pastoralGroupId: effectivePastoralGroupId,
-  });
+  // Por enquanto só Missas (a lógica de Evento já vem pronta no back;
+  // é só remover este filtro quando for liberar Eventos)
+  const coverageMasses = coverage.filter((c) => c.sourceType === 'MASS');
+  const completeCount = coverageMasses.filter((c) => c.status === 'COMPLETE').length;
+  const pendingItems = coverageMasses.filter((c) => c.status === 'INCOMPLETE');
 
-  const assignmentsCount = monthSchedules.reduce((sum, s) => sum + s.assignments.length, 0);
+  // Coordenador só conta os voluntários da própria pastoral
+  const membersCount = isCoordenador
+    ? volunteers.filter((v) => v.pastoralGroupId === currentUser?.pastoralGroup?.id).length
+    : selectedPastoralGroupId
+      ? volunteers.filter((v) => v.pastoralGroupId === selectedPastoralGroupId).length
+      : volunteers.length;
 
   if (userLoading || !currentUser) {
     return null;
@@ -106,9 +102,9 @@ export default function EscalasPage() {
       />
 
       <div className="mt-8 grid grid-cols-4 gap-4">
-        <Card icon={CalendarDays} title="Missas do mês" value={massesThisMonth.length} />
-        <Card icon={CheckCircle2} title="Escalados" value={assignmentsCount} />
-        <Card icon={Users} title="Membros Ativos" value={volunteers.length} />
+        <Card icon={CalendarDays} title="Missas do mês" value={coverageMasses.length} />
+        <Card icon={CheckCircle2} title="Escalados" value={completeCount} />
+        <Card icon={Users} title="Membros Ativos" value={membersCount} />
         <Card
           icon={AlertCircle}
           title="Pendentes"
@@ -120,7 +116,7 @@ export default function EscalasPage() {
 
       {showPending && (
         <div className="mt-4">
-          <PendingSchedulesTable items={pendingItems} isLoading={pendingLoading} />
+          <PendingSchedulesTable items={pendingItems} isLoading={coverageLoading} />
         </div>
       )}
 

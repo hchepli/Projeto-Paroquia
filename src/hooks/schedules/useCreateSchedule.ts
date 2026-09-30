@@ -1,12 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Schedule } from '@/types/schedules/schedule';
-import { CreateScheduleAssignmentInput } from '@/types/schedules/create-schedule';
-
-export interface CreateScheduleInput {
-  massId?: number;
-  eventId?: number;
-  assignments: CreateScheduleAssignmentInput[];
-}
+import { CreateScheduleInput } from '@/types/schedules/create-schedule';
 
 async function createSchedule(input: CreateScheduleInput): Promise<Schedule> {
   const res = await fetch('/api/schedules', {
@@ -36,6 +30,7 @@ export function useCreateSchedule() {
     mutationFn: createSchedule,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schedules'] });
+      queryClient.invalidateQueries({ queryKey: ['schedules-coverage'] });
       queryClient.invalidateQueries({ queryKey: ['schedules-pending'] });
       queryClient.invalidateQueries({ queryKey: ['schedules-summary'] });
     },
