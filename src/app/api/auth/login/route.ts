@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiFetch } from '@/lib/api';
 
+const DEFAULT_MAX_AGE = 60 * 60 * 8; // fallback; o valor real vem do Nest (expires_in)
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
 
@@ -11,22 +13,52 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const backendRes = await apiFetch('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email: body.email, password: body.password }),
-  });
-
-  if (!backendRes.ok) {
-    // Repassa a mensagem genérica do back (RN015 / UC007 3a:
-    // não revelar se o erro é de e-mail ou senha).
-    const errorBody = await backendRes.json().catch(() => null);
+  let backendRes: Response;
+  try {
+    backendRes = await apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: body.email, password: body.password }),
+    });
+  } catch {
     return NextResponse.json(
-      { message: errorBody?.message ?? 'Credenciais inválidas.' },
-      { status: backendRes.status },
+      { message: 'Serviço indisponível no momento. Tente novamente em instantes.' },
+      { status: 503 },
     );
   }
 
-  const { access_token } = await backendRes.json();
+  if (!backendRes.ok) {
+    if (backendRes.status === 429) {
+      return NextResponse.json(
+        { message: 'Muitas tentativas. Aguarde 1 minuto e tente novamente.' },
+        { status: 429 },
+      );
+    }
+
+    if (backendRes.status === 401) {
+      // Repassa a mensagem do back: genérica para credenciais (UC007 3a)
+      // ou específica para conta inativa (UC007 3b).
+      const errorBody = await backendRes.json().catch(() => null);
+      return NextResponse.json(
+        { message: errorBody?.message ?? 'E-mail ou senha incorretos.' },
+        { status: 401 },
+      );
+    }
+
+    if (backendRes.status === 400) {
+      return NextResponse.json(
+        { message: 'Informe um e-mail e uma senha válidos.' },
+        { status: 400 },
+      );
+    }
+
+    // 5xx e demais: não expõe detalhe interno
+    return NextResponse.json(
+      { message: 'Não foi possível entrar agora. Tente novamente em instantes.' },
+      { status: 503 },
+    );
+  }
+
+  const { access_token, expires_in } = await backendRes.json();
 
   const response = NextResponse.json({ ok: true });
 
@@ -35,9 +67,8 @@ export async function POST(req: NextRequest) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    // TODO: ajustar quando o tempo de expiração do JWT for definido
-    // (Dia 3 do roadmap-auth.md ainda está em aberto sobre isso)
-    maxAge: 60 * 60 * 8, // 8h
+    // Mesma fonte do expiresIn do JWT (auth.constants.ts no Nest)
+    maxAge: expires_in ?? DEFAULT_MAX_AGE,
   });
 
   return response;

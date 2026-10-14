@@ -8,7 +8,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
   }
 
-  const backendRes = await apiFetch('/photos', { token });
+  // Repassa o filtro opcional ?albumId= para o backend.
+  const albumId = req.nextUrl.searchParams.get('albumId');
+  const qs = albumId ? `?albumId=${encodeURIComponent(albumId)}` : '';
+
+  const backendRes = await apiFetch(`/photos${qs}`, { token });
 
   if (!backendRes.ok) {
     const errorBody = await backendRes.json().catch(() => null);
@@ -22,10 +26,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data);
 }
 
-// IMPORTANTE: encaminha o multipart tal como veio, sem forçar
-// 'Content-Type': application/json. Se `apiFetch` setar esse header por
-// padrão internamente, isso vai quebrar o upload — vale conferir a
-// implementação de apiFetch antes de testar isso em produção.
+// Encaminha o multipart tal como veio. O apiFetch agora omite o
+// Content-Type quando o body é FormData.
 export async function POST(req: NextRequest) {
   const token = req.cookies.get('access_token')?.value;
   if (!token) {

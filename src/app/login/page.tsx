@@ -12,27 +12,31 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-    setLoading(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.message ?? 'E-mail ou senha incorretos.');
+        return;
+      }
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.message ?? 'E-mail ou senha incorretos.');
-      return;
+      router.push('/painel');
+      router.refresh();
+    } catch {
+      setError('Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+    } finally {
+      setLoading(false);
     }
-
-    router.push('/painel');
-    router.refresh();
   }
 
   return (

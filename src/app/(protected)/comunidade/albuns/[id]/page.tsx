@@ -1,7 +1,7 @@
 // src/app/comunidade/albuns/[id]/page.tsx
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Star, Trash2, Upload } from 'lucide-react';
 import Header from '@/components/layout/Header';
@@ -13,6 +13,11 @@ import { useSetCoverPhoto } from '@/hooks/photos/useSetCoverPhoto';
 import { useDeletePhoto } from '@/hooks/photos/useDeletePhoto';
 import { useEvents } from '@/hooks/events/useEvents';
 
+interface UploadReport {
+  sent: number;
+  failed: { name: string; reason: string }[];
+}
+
 export default function AlbumDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -20,7 +25,8 @@ export default function AlbumDetailPage() {
   const albumId = Number(params.id);
 
   const { data: album, isLoading: albumLoading } = useAlbum(albumId);
-  const { data: allPhotos = [], isLoading: photosLoading } = usePhotos();
+  // Filtro por álbum feito no backend (?albumId=).
+  const { data: photos = [], isLoading: photosLoading } = usePhotos(albumId);
   const { data: eventsResult } = useEvents({ limit: 100 });
   const events = eventsResult?.data ?? [];
 
@@ -35,12 +41,8 @@ export default function AlbumDetailPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventId, setEventId] = useState<string>('');
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  const photos = useMemo(
-    () => allPhotos.filter((p) => p.albumId === albumId),
-    [allPhotos, albumId],
-  );
+  const [uploadReport, setUploadReport] = useState<UploadReport | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Preenche o formulário de edição só na primeira vez que o álbum chega
   // (evita sobrescrever o que o usuário está digitando a cada refetch).
@@ -63,26 +65,32 @@ export default function AlbumDetailPage() {
     setIsEditing(false);
   }
 
+  // UC028 — rejeição parcial: um arquivo inválido NÃO interrompe os demais.
+  // A capa é decidida pelo backend (primeira foto do álbum vira capa).
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setUploadError(null);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
 
-    const hasNoCover = photos.length === 0;
+    setUploadReport(null);
+    setIsUploading(true);
 
-    try {
-      for (let i = 0; i < files.length; i++) {
-        await uploadPhoto.mutateAsync({
-          albumId,
-          file: files[i],
-          isCover: hasNoCover && i === 0,
+    const report: UploadReport = { sent: 0, failed: [] };
+
+    for (const file of files) {
+      try {
+        await uploadPhoto.mutateAsync({ albumId, file });
+        report.sent += 1;
+      } catch (err) {
+        report.failed.push({
+          name: file.name,
+          reason: err instanceof Error ? err.message : 'Erro ao enviar.',
         });
       }
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Erro ao enviar foto(s).');
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+
+    setUploadReport(report);
+    setIsUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   function handleRemovePhoto(photoId: number) {
@@ -161,11 +169,11 @@ export default function AlbumDetailPage() {
           </h2>
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploadPhoto.isPending}
+            disabled={isUploading}
             className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
           >
             <Upload size={14} />
-            {uploadPhoto.isPending ? 'Enviando...' : 'Adicionar fotos'}
+            {isUploading ? 'Enviando...' : 'Adicionar fotos'}
           </button>
           <input
             ref={fileInputRef}
@@ -177,9 +185,25 @@ export default function AlbumDetailPage() {
           />
         </div>
 
-        {uploadError && (
-          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {uploadError}
+        {uploadReport && (
+          <div className="mb-4 space-y-2">
+            {uploadReport.sent > 0 && (
+              <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+                {uploadReport.sent} foto(s) enviada(s) com sucesso.
+              </div>
+            )}
+            {uploadReport.failed.length > 0 && (
+              <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                <p className="font-medium">{uploadReport.failed.length} foto(s) recusada(s):</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {uploadReport.failed.map((f) => (
+                    <li key={f.name}>
+                      {f.name}: {f.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

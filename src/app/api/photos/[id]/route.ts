@@ -2,7 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiFetch } from '@/lib/api';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+type Ctx = { params: Promise<{ id: string }> };
+
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  const { id } = await params;
   const token = req.cookies.get('access_token')?.value;
   if (!token) {
     return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
@@ -13,11 +16,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
   }
 
-  const backendRes = await apiFetch(`/photos/${params.id}`, {
+  const backendRes = await apiFetch(`/photos/${id}`, {
     token,
     method: 'PATCH',
     body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
   });
 
   const data = await backendRes.json().catch(() => null);
@@ -32,13 +34,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(data);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: Ctx) {
+  const { id } = await params;
   const token = req.cookies.get('access_token')?.value;
   if (!token) {
     return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
   }
 
-  const backendRes = await apiFetch(`/photos/${params.id}`, { token, method: 'DELETE' });
+  const backendRes = await apiFetch(`/photos/${id}`, { token, method: 'DELETE' });
 
   if (!backendRes.ok) {
     const errorBody = await backendRes.json().catch(() => null);
