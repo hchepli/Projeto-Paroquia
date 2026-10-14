@@ -1,0 +1,415 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// Modelo traduzido de schema_modelagem_mysql(1).sql para PostgreSQL/Prisma.
+// Nomenclatura: modelos e campos em inglês (padrão adotado nos módulos Nest),
+// mapeados via @@map/@map para os nomes de tabela/coluna em português do
+// script de referência, para manter rastreabilidade com a modelagem original.
+//
+// Regras de negócio NÃO garantidas via constraint de banco nesta etapa
+// (decisão: validar na camada de service por enquanto):
+//   - RN007: Schedule deve vincular-se a Mass OU Event, nunca ambos / nenhum.
+//   - RN010 (capa única): no máximo 1 Photo com isCover=true por Album.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("usuarios_status")
+}
+
+enum MassType {
+  COMMON
+  SPECIAL
+
+  @@map("missas_tipo")
+}
+
+enum EventStatus {
+  ACTIVE
+  CANCELLED
+
+  @@map("eventos_status")
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+
+  @@map("comunicados_status")
+}
+
+enum CategoryType {
+  EVENT
+  ANNOUNCEMENT
+
+  @@map("categorias_tipo")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+
+  @@map("logs_auditoria_acao")
+}
+
+// ------------------------------------------------------------
+// ROLES (cargos) - RF004
+// ------------------------------------------------------------
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @map("nome") @db.VarChar(60)
+  description String?  @map("descricao") @db.VarChar(255)
+  isBase      Boolean  @default(false) @map("is_base")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       User[]
+  permissions Permission[]
+
+  @@map("cargos")
+}
+
+// ------------------------------------------------------------
+// PERMISSIONS (permissoes) - RBAC granular (RF005/RN005)
+// ------------------------------------------------------------
+model Permission {
+  id        Int     @id @default(autoincrement())
+  roleId    Int     @map("cargo_id")
+  resource  String  @map("recurso") @db.VarChar(60)
+  canCreate Boolean @default(false) @map("pode_criar")
+  canEdit   Boolean @default(false) @map("pode_editar")
+  canDelete Boolean @default(false) @map("pode_remover")
+  canView   Boolean @default(false) @map("pode_visualizar")
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, resource], map: "uq_cargo_recurso")
+  @@map("permissoes")
+}
+
+// ------------------------------------------------------------
+// PASTORAL GROUPS (pastorais)
+// ------------------------------------------------------------
+model PastoralGroup {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @map("nome") @db.VarChar(120)
+  description String?  @map("descricao")
+  contact     String?  @map("contato") @db.VarChar(120)
+  defaultRole String?  @map("default_role") @db.VarChar(80)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users      User[]
+  schedules  Schedule[]
+  masses     MassPastoralGroup[]
+  events     EventPastoralGroup[]
+  volunteers Volunteer[]
+
+  @@map("pastorais")
+}
+
+// ------------------------------------------------------------
+// USERS (usuarios) - RF001/RF002 - apenas admins no MVP
+// ------------------------------------------------------------
+model User {
+  id              String     @id @default(uuid()) @db.Char(36)
+  name            String     @map("nome") @db.VarChar(150)
+  email           String     @unique @db.VarChar(180)
+  passwordHash    String     @map("senha_hash") @db.VarChar(255)
+  roleId          Int        @map("cargo_id")
+  pastoralGroupId Int?       @map("pastoral_id") // só preenchido se Role = Coordenador de Pastoral (RN006)
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  role          Role           @relation(fields: [roleId], references: [id])
+  pastoralGroup PastoralGroup? @relation(fields: [pastoralGroupId], references: [id])
+  announcements Announcement[]
+  auditLogs     AuditLog[]
+
+  @@map("usuarios")
+}
+
+// ------------------------------------------------------------
+// VOLUNTEERS (voluntarios) - RN009 - não são usuários, sem login
+// ------------------------------------------------------------
+model Volunteer {
+  id              Int      @id @default(autoincrement())
+  name            String   @map("nome") @db.VarChar(150)
+  phone           String   @map("telefone") @db.VarChar(30)
+  email           String?  @db.VarChar(180)
+  pastoralGroupId Int      @map("pastoral_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  pastoralGroup PastoralGroup        @relation(fields: [pastoralGroupId], references: [id])
+  assignments   ScheduleAssignment[]
+
+  @@map("voluntarios")
+}
+
+// ------------------------------------------------------------
+// MASSES (missas)
+// ------------------------------------------------------------
+model Mass {
+  id        Int      @id @default(autoincrement())
+  title     String   @map("titulo") @db.VarChar(150)
+  dateTime  DateTime @map("data_hora")
+  type      MassType @default(COMMON) @map("tipo")
+  location  String   @map("local") @db.VarChar(180)
+  notes     String?  @map("observacoes")
+  generatedFromTemplateId Int?     @map("generated_from_template_id") // preenchida só se veio de recorrência (Bloco 5)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  generatedFromTemplate MassTemplate? @relation(fields: [generatedFromTemplateId], references: [id])
+
+  events    Event[]
+  schedules Schedule[]
+  pastoralGroups MassPastoralGroup[]
+
+  @@map("missas")
+}
+
+// ------------------------------------------------------------
+// CATEGORIES (categorias)
+// ------------------------------------------------------------
+model Category {
+  id        Int          @id @default(autoincrement())
+  name      String       @unique @map("nome") @db.VarChar(80)
+  type      CategoryType @map("tipo")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  events        Event[]
+  announcements Announcement[]
+
+  @@map("categorias")
+}
+
+// ------------------------------------------------------------
+// EVENTS (eventos) - RN002 - correlação opcional e não-exclusiva com Mass
+// ------------------------------------------------------------
+model Event {
+  id          Int         @id @default(autoincrement())
+  name        String      @map("nome") @db.VarChar(150)
+  slug        String      @unique @db.VarChar(180)
+  description String?     @map("descricao")
+  categoryId  Int?        @map("categoria_id")
+  startDate   DateTime    @map("data_inicio")
+  endDate     DateTime?   @map("data_fim")
+  location    String      @map("local") @db.VarChar(180)
+  status      EventStatus @default(ACTIVE)
+  massId      Int?        @map("missa_id")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  category Category? @relation(fields: [categoryId], references: [id])
+  mass     Mass?      @relation(fields: [massId], references: [id], onDelete: SetNull)
+
+  schedules               Schedule[]
+  albums                  Album[]
+  attendanceConfirmations AttendanceConfirmation[]
+  pastoralGroups EventPastoralGroup[]
+
+  @@map("eventos")
+}
+
+model MassPastoralGroup {
+  massId          Int
+  pastoralGroupId Int
+
+  mass          Mass          @relation(fields: [massId], references: [id], onDelete: Cascade)
+  pastoralGroup PastoralGroup @relation(fields: [pastoralGroupId], references: [id], onDelete: Cascade)
+
+  @@id([massId, pastoralGroupId])
+  @@map("missa_pastorais")
+}
+
+model EventPastoralGroup {
+  eventId         Int
+  pastoralGroupId Int
+
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pastoralGroup PastoralGroup @relation(fields: [pastoralGroupId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, pastoralGroupId])
+  @@map("evento_pastorais")
+}
+
+// ------------------------------------------------------------
+// SCHEDULES (escalas) - RN007 - vínculo exclusivo Mass XOR Event
+// (validado na camada de service, ver nota no topo do arquivo)
+// ------------------------------------------------------------
+model Schedule {
+  id              String   @id @default(uuid()) @db.Char(36)
+  massId          Int?     @map("missa_id")
+  eventId         Int?     @map("evento_id")
+  pastoralGroupId Int?     @map("pastoral_id") // escopo/filtro de relatório (RN006/RN008)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  mass          Mass?          @relation(fields: [massId], references: [id], onDelete: Cascade)
+  event         Event?         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pastoralGroup PastoralGroup? @relation(fields: [pastoralGroupId], references: [id])
+
+  assignments ScheduleAssignment[]
+
+  @@map("escalas")
+}
+
+// ------------------------------------------------------------
+// SCHEDULE ASSIGNMENTS (escala_atribuicoes)
+// ------------------------------------------------------------
+model ScheduleAssignment {
+  id          Int      @id @default(autoincrement())
+  scheduleId  String   @map("escala_id") @db.Char(36)
+  volunteerId Int      @map("voluntario_id")
+  role        String   @map("funcao") @db.VarChar(80) // ex: leitor, ministro_eucaristia, coroinha
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  schedule  Schedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  volunteer Volunteer @relation(fields: [volunteerId], references: [id])
+
+  @@unique([scheduleId, volunteerId, role], map: "uq_escala_voluntario_funcao")
+  @@map("escala_atribuicoes")
+}
+
+// ------------------------------------------------------------
+// ANNOUNCEMENTS (comunicados)
+// ------------------------------------------------------------
+model Announcement {
+  id         Int                @id @default(autoincrement())
+  title      String             @map("titulo") @db.VarChar(180)
+  content    String             @map("conteudo")
+  slug        String      @unique @db.VarChar(180)
+  categoryId Int?               @map("categoria_id")
+  status     AnnouncementStatus @default(PUBLISHED)
+  imageUrl   String?            @map("imagem_url") @db.VarChar(255)
+  authorId   String             @map("autor_id") @db.Char(36)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  category Category? @relation(fields: [categoryId], references: [id])
+  author   User      @relation(fields: [authorId], references: [id])
+
+  @@map("comunicados")
+}
+
+// ------------------------------------------------------------
+// ALBUMS (albuns) - RN003 - vínculo opcional com Event
+// ------------------------------------------------------------
+model Album {
+  id          Int      @id @default(autoincrement())
+  title       String   @map("titulo") @db.VarChar(150)
+  description String?  @map("descricao")
+  slug        String      @unique @db.VarChar(150)
+  eventId     Int?     @map("evento_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  event  Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  photos Photo[]
+
+  @@map("albuns")
+}
+
+// ------------------------------------------------------------
+// PHOTOS (fotos) - RN010 - 1 Photo pertence a exatamente 1 Album
+// Capa única por álbum validada na camada de service (ver nota no topo)
+// ------------------------------------------------------------
+model Photo {
+  id        Int      @id @default(autoincrement())
+  albumId   Int      @map("album_id")
+  url       String   @db.VarChar(255)
+  isCover   Boolean  @default(false) @map("is_capa")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@map("fotos")
+}
+
+// ------------------------------------------------------------
+// SACRAMENTS (sacramentos)
+// ------------------------------------------------------------
+model Sacrament {
+  id                Int      @id @default(autoincrement())
+  name              String   @map("nome") @db.VarChar(120)
+  description       String   @map("descricao")
+  slug        String      @unique @db.VarChar(180)
+  requiredDocuments String?  @map("documentos_necessarios")
+  faq               Json?    @map("faq")
+  displayOrder      Int      @default(0) @map("display_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("sacramentos")
+}
+
+// ------------------------------------------------------------
+// ATTENDANCE CONFIRMATIONS (confirmacoes_presenca) - RF012/RN012 - sem login
+// ------------------------------------------------------------
+model AttendanceConfirmation {
+  id        String   @id @default(uuid()) @db.Char(36)
+  eventId   Int      @map("evento_id")
+  name      String   @map("nome") @db.VarChar(150)
+  contact   String   @map("contato") @db.VarChar(150)
+  ipAddress String?  @map("ip_address") @db.VarChar(45) // apoio ao rate limiting (RNF017)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("confirmacoes_presenca")
+}
+
+// ------------------------------------------------------------
+// AUDIT LOGS (logs_auditoria) - RNF011
+// ------------------------------------------------------------
+model AuditLog {
+  id           String      @id @default(uuid()) @db.Char(36)
+  userId       String      @map("usuario_id") @db.Char(36)
+  action       AuditAction @map("acao")
+  entity       String      @map("entidade") @db.VarChar(80)
+  entityId     String      @map("entidade_id") @db.VarChar(36)
+  previousData Json?       @map("dados_anteriores")
+  newData      Json?       @map("dados_novos")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("logs_auditoria")
+}
+
+model MassTemplate {
+  id        Int      @id @default(autoincrement())
+  dayOfWeek Int      @map("day_of_week") // 0 (domingo) a 6 (sábado)
+  time      String   @db.VarChar(5) // formato "HH:mm", ex: "19:00"
+  title     String   @map("titulo") @db.VarChar(150)
+  location  String   @map("local") @db.VarChar(180)
+  type      MassType @default(COMMON) @map("tipo")
+  notes     String?  @map("observacoes")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  generatedMasses Mass[]
+
+  @@map("missa_templates")
+}
