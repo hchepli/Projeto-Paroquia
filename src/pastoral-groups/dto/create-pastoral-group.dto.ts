@@ -1,36 +1,39 @@
+// src/pastoral-groups/dto/create-pastoral-group.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { trimString, trimToNull } from '../../common/transformers/string.transformers';
 
-// Equivalente ao "model PastoralGroup" do schema.prisma (tabela `pastorais` no SQL de referência).
 export class CreatePastoralGroupDto {
-  @ApiProperty({
-    description: 'Nome da pastoral',
-    example: 'Pastoral da Catequese',
-    maxLength: 120,
-  })
+  @ApiProperty({ example: 'Catequese', maxLength: 120 })
+  @Transform(trimString)
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
   name!: string;
 
-  @ApiPropertyOptional({
-    description: 'Descrição da pastoral e suas atividades',
-    example: 'Responsável pela preparação de crianças e adolescentes para a Primeira Eucaristia.',
-  })
+  @ApiPropertyOptional({ nullable: true })
+  @Transform(trimToNull)
   @IsOptional()
   @IsString()
-  description?: string;
+  description?: string | null;
 
-  @ApiPropertyOptional({
-    description: 'Contato da pastoral (telefone, e-mail ou responsável)',
-    example: '(47) 99999-0000',
-    maxLength: 120,
-  })
+  @ApiPropertyOptional({ example: '(47) 99999-0000', maxLength: 120, nullable: true })
+  @Transform(trimToNull)
   @IsOptional()
   @IsString()
   @MaxLength(120)
-  contact?: string;
+  contact?: string | null;
 
-  // Vínculo com Coordenador (User.pastoralGroupId) NÃO aparece aqui:
-  // a relação é definida do lado do User (RN006), não ao criar a Pastoral.
+  @ApiPropertyOptional({
+    description: 'Função sugerida ao escalar voluntários desta pastoral (texto livre). Ex: leitor, coroinha.',
+    example: 'leitor',
+    maxLength: 80,
+    nullable: true,
+  })
+  @Transform(trimToNull)
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  defaultRole?: string | null;
 }

@@ -1,115 +1,171 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+// src/volunteers/volunteers.service.ts
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { ROLE_NAMES } from '../common/constrants/role-names.constants';
 import { CreateVolunteerDto } from './dto/create-volunteer.dto';
 import { UpdateVolunteerDto } from './dto/update-volunteer.dto';
-import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '../../generated/prisma/client';
+import { FindVolunteersQueryDto } from './dto/find-volunteers-query.dto';
 
-interface ScopedUser {
-  roleName: string;
-  pastoralGroupId: number | null;
-}
+const volunteerInclude = {
+  pastoralGroup: { select: { id: true, name: true } },
+} satisfies Prisma.VolunteerInclude;
 
 @Injectable()
 export class VolunteersService {
   constructor(private readonly prismaService: PrismaService) {}
 
-async create(createVolunteerDto: CreateVolunteerDto, user: ScopedUser) {
-  const { pastoralGroupId, ...rest } = createVolunteerDto;
+  private isCoordinator(user: AuthUser) {
+    return user.roleName === ROLE_NAMES.COORDENADOR;
+  }
 
-  if (user.roleName === 'Coordenador de Pastoral') {
-    if (!user.pastoralGroupId || pastoralGroupId !== user.pastoralGroupId) {
+  // null === null NÃO pode liberar acesso: Coordenador sem pastoral não é dono de nada.
+  private ownsPastoral(user: AuthUser, pastoralGroupId: number) {
+    return user.pastoralGroupId != null && user.pastoralGroupId === pastoralGroupId;
+  }
+
+  private async assertPastoralExists(id: number) {
+    const pastoral = await this.prismaService.pastoralGroup.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!pastoral) throw new NotFoundException('Pastoral não encontrada');
+  }
+
+  /** Atribuições do voluntário em escalas, com flag de futura (UC009). */
+  private async findAssignments(volunteerId: number) {
+    const rows = await this.prismaService.scheduleAssignment.findMany({
+      where: { volunteerId },
+      select: {
+        role: true,
+        schedule: {
+          select: {
+            id: true,
+            mass: { select: { title: true, dateTime: true } },
+            event: { select: { name: true, startDate: true, endDate: true } },
+          },
+        },
+      },
+    });
+
+    const now = new Date();
+    return rows
+      .map((r) => {
+        const date = r.schedule.mass?.dateTime ?? r.schedule.event?.startDate ?? null;
+        const end =
+          r.schedule.mass?.dateTime ?? r.schedule.event?.endDate ?? r.schedule.event?.startDate ?? null;
+        return {
+          scheduleId: r.schedule.id,
+          sourceType: r.schedule.mass ? ('MASS' as const) : ('EVENT' as const),
+          title: r.schedule.mass?.title ?? r.schedule.event?.name ?? '—',
+          role: r.role,
+          date,
+          isFuture: end !== null && end >= now,
+        };
+      })
+      .sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
+  }
+
+  async create(dto: CreateVolunteerDto, user: AuthUser) {
+    if (this.isCoordinator(user) && !this.ownsPastoral(user, dto.pastoralGroupId)) {
       throw new ForbiddenException(
         'Você só pode cadastrar Voluntários para a sua própria Pastoral (RN006).',
       );
     }
+    await this.assertPastoralExists(dto.pastoralGroupId);
+
+    const { pastoralGroupId, ...rest } = dto;
+    return this.prismaService.volunteer.create({
+      data: { ...rest, pastoralGroup: { connect: { id: pastoralGroupId } } },
+      include: volunteerInclude,
+    });
   }
 
-  try {
-    return await this.prismaService.volunteer.create({
-      data: {
-        ...rest,
-        pastoralGroup: { connect: { id: pastoralGroupId } },
-      },
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        throw new ConflictException('Já existe um voluntário com esse email');
-      }
-      if (error.code === 'P2025' || error.code === 'P2003') {
-        throw new ConflictException('Pastoral informada não existe.');
-      }
+  async findAll(user: AuthUser, query: FindVolunteersQueryDto) {
+    let scopedId: number | undefined;
+    if (this.isCoordinator(user)) {
+      if (user.pastoralGroupId == null) return [];
+      scopedId = user.pastoralGroupId; // ignora qualquer filtro vindo da query
+    } else {
+      scopedId = query.pastoralGroupId;
     }
-    throw error;
-  }
-}
 
-  findAll(pastoralGroupId?: number) {
     return this.prismaService.volunteer.findMany({
-      where: pastoralGroupId ? { pastoralGroupId } : undefined,
+      where: scopedId ? { pastoralGroupId: scopedId } : undefined,
+      include: volunteerInclude,
+      orderBy: { name: 'asc' },
     });
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, user: AuthUser) {
     const volunteer = await this.prismaService.volunteer.findUnique({
       where: { id },
+      include: volunteerInclude,
     });
-    if (!volunteer) {
-      throw new NotFoundException('Voluntário não encontrado');
+    if (!volunteer) throw new NotFoundException('Voluntário não encontrado');
+
+    if (this.isCoordinator(user) && !this.ownsPastoral(user, volunteer.pastoralGroupId)) {
+      throw new ForbiddenException('Você não tem acesso a este Voluntário.');
     }
     return volunteer;
   }
 
-  async update(id: number, updateVolunteerDto: UpdateVolunteerDto, user: ScopedUser) {
-  const volunteer = await this.findOne(id);
+  async update(id: number, dto: UpdateVolunteerDto, user: AuthUser) {
+    const current = await this.findOne(id, user);
+    const { pastoralGroupId, ...rest } = dto;
 
-  if (user.roleName === 'Coordenador de Pastoral') {
-    if (!user.pastoralGroupId || volunteer.pastoralGroupId !== user.pastoralGroupId) {
-      throw new ForbiddenException('Você não tem acesso a este Voluntário.');
+    const moveTo =
+      pastoralGroupId !== undefined && pastoralGroupId !== current.pastoralGroupId
+        ? pastoralGroupId
+        : undefined;
+
+    if (moveTo !== undefined) {
+      if (this.isCoordinator(user)) {
+        throw new ForbiddenException('Você não pode mover um Voluntário para outra Pastoral (RN006).');
+      }
+      await this.assertPastoralExists(moveTo);
+
+      const upcoming = (await this.findAssignments(id)).filter((a) => a.isFuture);
+      if (upcoming.length > 0) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'Conflict',
+          message: `Não é possível mudar de Pastoral: o Voluntário está em ${upcoming.length} escala(s) futura(s). Remova-o dessas escalas antes.`,
+          assignments: upcoming,
+        });
+      }
     }
-    if (
-      updateVolunteerDto.pastoralGroupId !== undefined &&
-      updateVolunteerDto.pastoralGroupId !== user.pastoralGroupId
-    ) {
-      throw new ForbiddenException('Você não pode mover um Voluntário para outra Pastoral (RN006).');
-    }
-  }
 
-  const { pastoralGroupId, ...rest } = updateVolunteerDto;
-
-  try {
     return this.prismaService.volunteer.update({
       where: { id },
       data: {
         ...rest,
-        ...(pastoralGroupId !== undefined && {
-          pastoralGroup: { connect: { id: pastoralGroupId } },
-        }),
+        ...(moveTo !== undefined && { pastoralGroup: { connect: { id: moveTo } } }),
       },
+      include: volunteerInclude,
     });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        throw new ConflictException('Já existe um voluntário com esse email');
-      }
-      if (error.code === 'P2025' || error.code === 'P2003') {
-        throw new ConflictException('Pastoral informada não existe.');
-      }
-    }
-    throw error;
   }
-}
 
-  async remove(id: number, user: ScopedUser) {
-    const volunteer = await this.findOne(id);
+  async remove(id: number, confirm: boolean, user: AuthUser) {
+    await this.findOne(id, user);
 
-    if (
-      user.roleName === 'Coordenador de Pastoral' &&
-      volunteer.pastoralGroupId !== user.pastoralGroupId
-    ) {
-      throw new ForbiddenException('Você não tem acesso a este Voluntário.');
+    const assignments = await this.findAssignments(id);
+    if (assignments.length > 0 && !confirm) {
+      const upcoming = assignments.filter((a) => a.isFuture).length;
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'Conflict',
+        requiresConfirmation: true,
+        message: `Este Voluntário tem ${assignments.length} atribuição(ões) em escalas (${upcoming} futura(s)). Confirme para removê-las junto com o cadastro.`,
+        assignments,
+      });
     }
 
-    return this.prismaService.volunteer.delete({ where: { id } });
+    // Atômico: ou apaga atribuições + voluntário, ou nada.
+    return this.prismaService.$transaction(async (tx) => {
+      await tx.scheduleAssignment.deleteMany({ where: { volunteerId: id } });
+      return tx.volunteer.delete({ where: { id } });
+    });
   }
 }

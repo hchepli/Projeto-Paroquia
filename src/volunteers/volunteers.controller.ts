@@ -1,53 +1,56 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, Query } from '@nestjs/common';
+// src/volunteers/volunteers.controller.ts
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { VolunteersService } from './volunteers.service';
 import { CreateVolunteerDto } from './dto/create-volunteer.dto';
 import { UpdateVolunteerDto } from './dto/update-volunteer.dto';
+import { FindVolunteersQueryDto } from './dto/find-volunteers-query.dto';
+import { RemoveVolunteerQueryDto } from './dto/remove-volunteer-query.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
-import type { RequestWithUser } from '../common/interfaces/request-with-user.interface';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { ROLE_NAMES } from '../common/constrants/role-names.constants';
 import { Auditable } from '../audit-logs/decorators/auditable.decorator';
 
 @ApiBearerAuth()
+@Roles(ROLE_NAMES.ADMIN, ROLE_NAMES.SECRETARIA, ROLE_NAMES.COORDENADOR)
 @Controller('volunteers')
 export class VolunteersController {
   constructor(private readonly volunteersService: VolunteersService) {}
 
   @Auditable('Volunteer')
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Post()
-  create(@Body() createVolunteerDto: CreateVolunteerDto, @Req() req: RequestWithUser) {
-    return this.volunteersService.create(createVolunteerDto, req.user);
+  create(@Body() dto: CreateVolunteerDto, @CurrentUser() user: AuthUser) {
+    return this.volunteersService.create(dto, user);
   }
 
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Get()
-  findAll(@Query('pastoralGroupId') pastoralGroupId?: string) {
-    return this.volunteersService.findAll(
-      pastoralGroupId ? +pastoralGroupId : undefined,
-    );
+  findAll(@Query() query: FindVolunteersQueryDto, @CurrentUser() user: AuthUser) {
+    return this.volunteersService.findAll(user, query);
   }
 
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Get(':id')
-  findOne(@Param('id') id: number) {
-    return this.volunteersService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    return this.volunteersService.findOne(id, user);
   }
 
   @Auditable('Volunteer')
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Patch(':id')
   update(
-    @Param('id') id: number,
-    @Body() updateVolunteerDto: UpdateVolunteerDto,
-    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateVolunteerDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.volunteersService.update(+id, updateVolunteerDto, req.user);
+    return this.volunteersService.update(id, dto, user);
   }
 
   @Auditable('Volunteer')
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Delete(':id')
-  remove(@Param('id') id: number, @Req() req: RequestWithUser) {
-    return this.volunteersService.remove(+id, req.user);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: RemoveVolunteerQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.volunteersService.remove(id, query.confirm === true, user);
   }
 }

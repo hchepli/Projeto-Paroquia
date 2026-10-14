@@ -108,7 +108,7 @@ model Permission {
 // ------------------------------------------------------------
 model PastoralGroup {
   id          Int      @id @default(autoincrement())
-  name        String   @map("nome") @db.VarChar(120)
+  name        String   @unique @map("nome") @db.VarChar(120)
   description String?  @map("descricao")
   contact     String?  @map("contato") @db.VarChar(120)
   defaultRole String?  @map("default_role") @db.VarChar(80)

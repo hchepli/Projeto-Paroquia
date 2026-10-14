@@ -7,13 +7,14 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseInterceptors,
   UploadedFile,
   ParseIntPipe,
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { PhotosService } from './photos.service';
 import type { UploadedFileLike } from './photos.service';
 import { UpdatePhotoDto } from './dto/update-photo.dto';
@@ -22,6 +23,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Auditable } from '../audit-logs/decorators/auditable.decorator';
 
 // RNF008 - valores sugeridos, ainda não confirmados definitivamente.
+// Obs.: o MIME aqui é só a 1ª barreira (declarado pelo cliente). A
+// validação real do conteúdo acontece no StorageService (sharp.metadata).
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -69,16 +72,14 @@ export class PhotosController {
     if (!file) {
       throw new BadRequestException('Arquivo (file) é obrigatório.');
     }
-    return this.photosService.create(
-      { albumId, isCover: isCover === 'true' },
-      file,
-    );
+    return this.photosService.create({ albumId, isCover: isCover === 'true' }, file);
   }
 
   @Public()
   @Get()
-  findAll() {
-    return this.photosService.findAll();
+  @ApiQuery({ name: 'albumId', required: false, type: Number })
+  findAll(@Query('albumId', new ParseIntPipe({ optional: true })) albumId?: number) {
+    return this.photosService.findAll(albumId);
   }
 
   @Public()
@@ -87,8 +88,7 @@ export class PhotosController {
     return this.photosService.findOne(id);
   }
 
-  // Atualização (ex: marcar/desmarcar capa) continua via JSON comum,
-  // não envolve reenvio de arquivo.
+  // Marcar capa continua via JSON comum (não reenvia arquivo).
   @Auditable('Photo')
   @Roles('Admin Geral', 'Secretaria')
   @Patch(':id')

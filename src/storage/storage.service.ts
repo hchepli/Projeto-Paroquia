@@ -1,5 +1,5 @@
 // src/storage/storage.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { StorageProvider } from './storage-provider.interface';
@@ -7,22 +7,25 @@ import { R2StorageProvider } from './providers/r2-storage.provider';
 import { CloudinaryStorageProvider } from './providers/cloudinary-storage.provider';
 
 // RNF009 - otimização de imagem no backend antes do upload.
-// Redimensiona (só encolhe, nunca aumenta) e comprime, mantendo o formato
-// original. Valores abaixo são um ponto de partida razoável, não uma
-// decisão travada em pedra - ajustar se algum álbum precisar de mais
-// qualidade (ex: fotos de capa em destaque).
+// Redimensiona (só encolhe) e comprime, mantendo o formato original.
 const MAX_WIDTH_PX = 1920;
 const JPEG_QUALITY = 80;
 const PNG_QUALITY = 80;
 const WEBP_QUALITY = 80;
+
+// Formato detectado pelo sharp (conteúdo real) → MIME esperado.
+const FORMAT_TO_MIME: Record<string, string> = {
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
 
 @Injectable()
 export class StorageService {
   private readonly provider: StorageProvider;
 
   constructor() {
-    // Troca de provider é só isso: mudar STORAGE_PROVIDER no .env.
-    // Nenhum outro módulo do sistema precisa saber qual está ativo.
+    // Troca de provider: mudar STORAGE_PROVIDER no .env.
     const providerName = (process.env.STORAGE_PROVIDER ?? 'r2').toLowerCase();
 
     switch (providerName) {
@@ -40,12 +43,9 @@ export class StorageService {
   }
 
   /**
-   * Faz upload de um arquivo (com otimização prévia, se for imagem) e
-   * retorna a URL pública final.
-   * @param buffer            Conteúdo do arquivo (memoryStorage do multer)
-   * @param folder            Pasta lógica, ex: `albums/${albumId}`
-   * @param originalFilename  Nome original do arquivo (só para referência na key, sanitizado)
-   * @param mimetype          Content-Type do arquivo
+   * Valida o conteúdo, otimiza e faz upload. Retorna a URL pública.
+   * Lança BadRequestException se o arquivo não for uma imagem válida
+   * (RNF008) — nada é enviado ao storage nesse caso.
    */
   async uploadFile(
     buffer: Buffer,
@@ -53,32 +53,48 @@ export class StorageService {
     originalFilename: string,
     mimetype: string,
   ): Promise<string> {
-    const optimizedBuffer = await this.optimizeImage(buffer, mimetype);
+    const optimizedBuffer = await this.validateAndOptimizeImage(buffer, mimetype);
     const sanitized = originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `${folder}/${randomUUID()}-${sanitized}`;
     return this.provider.upload(optimizedBuffer, key, mimetype);
   }
 
-  /**
-   * Remove um arquivo do storage a partir da URL salva no banco (ex: Photo.url).
-   */
+  /** Remove um arquivo do storage a partir da URL salva no banco. */
   async deleteFile(url: string): Promise<void> {
     await this.provider.deleteByUrl(url);
   }
 
   /**
-   * Redimensiona (só encolhe) e comprime a imagem antes do upload (RNF009).
-   * Se a otimização falhar por qualquer motivo, envia o arquivo original
-   * em vez de bloquear o upload inteiro.
+   * RNF008: valida pelo CONTEÚDO (não só pelo MIME declarado pelo cliente)
+   * e falha de forma fechada — nunca sobe o arquivo original sem validar.
+   * RNF009: redimensiona (só encolhe) e comprime.
    */
-  private async optimizeImage(buffer: Buffer, mimetype: string): Promise<Buffer> {
+  private async validateAndOptimizeImage(buffer: Buffer, mimetype: string): Promise<Buffer> {
+    let format: string | undefined;
     try {
-      let pipeline = sharp(buffer).resize({
-        width: MAX_WIDTH_PX,
-        withoutEnlargement: true, // nunca aumenta foto menor que o limite
-      });
+      format = (await sharp(buffer).metadata()).format;
+    } catch {
+      throw new BadRequestException('O arquivo enviado não é uma imagem válida.');
+    }
 
-      switch (mimetype) {
+    const detectedMime = format ? FORMAT_TO_MIME[format] : undefined;
+    if (!detectedMime) {
+      throw new BadRequestException('Formato de imagem não permitido. Use JPEG, PNG ou WEBP.');
+    }
+    if (detectedMime !== mimetype) {
+      throw new BadRequestException(
+        'O conteúdo do arquivo não corresponde ao tipo informado.',
+      );
+    }
+
+    try {
+      // .rotate() sem argumentos aplica a orientação EXIF antes de o sharp
+      // descartar os metadados (evita foto de celular ficar deitada).
+      let pipeline = sharp(buffer)
+        .rotate()
+        .resize({ width: MAX_WIDTH_PX, withoutEnlargement: true });
+
+      switch (detectedMime) {
         case 'image/jpeg':
           pipeline = pipeline.jpeg({ quality: JPEG_QUALITY });
           break;
@@ -88,16 +104,12 @@ export class StorageService {
         case 'image/webp':
           pipeline = pipeline.webp({ quality: WEBP_QUALITY });
           break;
-        default:
-          // Tipo não esperado (não deveria chegar aqui, já filtrado no
-          // controller) - devolve sem otimizar.
-          return buffer;
       }
 
       return await pipeline.toBuffer();
     } catch (error) {
-      console.error('Falha ao otimizar imagem, enviando arquivo original:', error);
-      return buffer;
+      console.error('Falha ao otimizar imagem:', error);
+      throw new BadRequestException('Não foi possível processar a imagem enviada.');
     }
   }
 }

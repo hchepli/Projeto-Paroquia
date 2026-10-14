@@ -1,16 +1,17 @@
 // src/photos/photos.service.ts
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { UpdatePhotoDto } from './dto/update-photo.dto';
 import { Prisma } from '../../generated/prisma/client';
 
-// Interface local mínima, com só os campos que este service usa.
-// Evita depender diretamente dos tipos do pacote @types/multer, que já
-// mudou de formato entre versões e quebrou a compilação (Express.Multer.File
-// sumiu, depois "File" nomeado também não bateu). O NestJS injeta em
-// tempo de execução um objeto com esses campos (e outros) via multer;
-// aqui só tipamos o que de fato lemos.
+// Interface local mínima, só com os campos que este service usa
+// (evita depender dos tipos do @types/multer, que já quebraram o build).
 export interface UploadedFileLike {
   buffer: Buffer;
   mimetype: string;
@@ -31,6 +32,8 @@ export class PhotosService {
   ) {}
 
   async create(input: CreatePhotoInput, file: UploadedFileLike) {
+    // O StorageService valida o CONTEÚDO (RNF008) e lança 400 se não for
+    // uma imagem válida — nesse caso nada chega ao storage.
     const url = await this.storageService.uploadFile(
       file.buffer,
       `albums/${input.albumId}`,
@@ -39,16 +42,31 @@ export class PhotosService {
     );
 
     try {
-      return await this.prismaService.photo.create({
-        data: {
-          albumId: input.albumId,
-          url,
-          isCover: input.isCover ?? false,
-        },
+      // RN010 (capa única), validada aqui no service, numa transaction:
+      // - primeira foto do álbum vira capa automaticamente;
+      // - se esta foto for capa, as demais do álbum são desmarcadas.
+      // Obs.: não protege contra 2 requests simultâneos (Bloco 6 —
+      // defesa final = índice único parcial no PostgreSQL).
+      return await this.prismaService.$transaction(async (tx) => {
+        const existingCover = await tx.photo.count({
+          where: { albumId: input.albumId, isCover: true },
+        });
+        const shouldBeCover = (input.isCover ?? false) || existingCover === 0;
+
+        if (shouldBeCover) {
+          await tx.photo.updateMany({
+            where: { albumId: input.albumId, isCover: true },
+            data: { isCover: false },
+          });
+        }
+
+        return tx.photo.create({
+          data: { albumId: input.albumId, url, isCover: shouldBeCover },
+        });
       });
     } catch (error) {
-      // Se o registro no banco falhar (ex: albumId inexistente), desfaz o
-      // upload já feito pra não deixar arquivo órfão no storage.
+      // Falhou no banco (ex: albumId inexistente) → desfaz o upload
+      // para não deixar arquivo órfão no storage.
       await this.storageService.deleteFile(url).catch(() => undefined);
 
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -63,8 +81,11 @@ export class PhotosService {
     }
   }
 
-  findAll() {
-    return this.prismaService.photo.findMany();
+  findAll(albumId?: number) {
+    return this.prismaService.photo.findMany({
+      where: albumId !== undefined ? { albumId } : undefined,
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async findOne(id: number) {
@@ -75,28 +96,53 @@ export class PhotosService {
     return photo;
   }
 
-  async update(id: number, updatePhotoDto: UpdatePhotoDto) {
-    await this.findOne(id);
-    try {
-      return await this.prismaService.photo.update({ where: { id }, data: updatePhotoDto });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('Já existe uma foto com esse identificador.');
-      }
-      throw error;
+  // Única alteração permitida: marcar como capa (RN010).
+  async update(id: number, dto: UpdatePhotoDto) {
+    const photo = await this.findOne(id);
+
+    if (!dto.isCover) {
+      throw new BadRequestException(
+        'Não é possível desmarcar a capa diretamente. Marque outra foto como capa para trocá-la.',
+      );
     }
+
+    if (photo.isCover) {
+      return photo; // já é a capa, nada a fazer
+    }
+
+    return this.prismaService.$transaction(async (tx) => {
+      await tx.photo.updateMany({
+        where: { albumId: photo.albumId, isCover: true },
+        data: { isCover: false },
+      });
+      return tx.photo.update({ where: { id }, data: { isCover: true } });
+    });
   }
 
-  // Dia 4: remoção de Photo também limpa o arquivo físico no storage.
+  // Remove a Photo (banco) e depois o arquivo físico (storage).
+  // Se a foto removida era a capa, a foto mais antiga restante assume.
   async remove(id: number) {
     const photo = await this.findOne(id);
-    const deleted = await this.prismaService.photo.delete({ where: { id } });
+
+    const deleted = await this.prismaService.$transaction(async (tx) => {
+      const removed = await tx.photo.delete({ where: { id } });
+
+      if (photo.isCover) {
+        const next = await tx.photo.findFirst({
+          where: { albumId: photo.albumId },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (next) {
+          await tx.photo.update({ where: { id: next.id }, data: { isCover: true } });
+        }
+      }
+      return removed;
+    });
 
     try {
       await this.storageService.deleteFile(photo.url);
     } catch (error) {
-      // Não quebra a resposta da API se o arquivo já não existir mais no
-      // storage por algum motivo — só loga (decisão já combinada no roadmap).
+      // Não quebra a resposta se o arquivo já não existir — só loga.
       console.error(`Falha ao remover arquivo do storage para Photo ${id}:`, error);
     }
 

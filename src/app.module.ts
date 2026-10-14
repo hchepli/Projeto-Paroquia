@@ -25,10 +25,19 @@ import { StorageModule } from './storage/storage.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditInterceptor } from './audit-logs/interceptors/audit.interceptor';
+import * as Joi from 'joi';
+import { APP_FILTER } from '@nestjs/core';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema: Joi.object({
+        DATABASE_URL: Joi.string().required(),
+        JWT_SECRET: Joi.string().min(32).required(),
+      }),
+    }),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -62,6 +71,10 @@ import { AuditInterceptor } from './audit-logs/interceptors/audit.interceptor';
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: PrismaExceptionFilter,
     },
   ],
 })

@@ -1,71 +1,92 @@
-import { Test, TestingModule } from '@nestjs/testing';
+// src/roles/roles.service.spec.ts
+import { Test } from '@nestjs/testing';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { RolesService } from './roles.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotFoundException, ConflictException } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client'; // confere esse caminho no seu projeto
+import { Prisma } from '../../generated/prisma/client';
+
+const prismaError = (code: string) =>
+  new Prisma.PrismaClientKnownRequestError('x', { code, clientVersion: 't' });
+
+const makeRole = (o: Record<string, unknown> = {}) => ({
+  id: 1, name: 'Secretaria', isBase: false, _count: { users: 0 }, ...o,
+});
 
 describe('RolesService', () => {
   let service: RolesService;
-  let prisma: PrismaService;
-
-  const mockPrismaService = {
-    role: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
+  const prismaMock: any = {
+    role: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        RolesService,
-        { provide: PrismaService, useValue: mockPrismaService },
-      ],
+    jest.resetAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [RolesService, { provide: PrismaService, useValue: prismaMock }],
     }).compile();
-
-    service = module.get<RolesService>(RolesService);
-    prisma = module.get<PrismaService>(PrismaService);
-
-    jest.clearAllMocks();
+    service = module.get(RolesService);
   });
 
-  it('deve criar um cargo', async () => {
-    const dto = { name: 'Secretaria' };
-    const roleEsperado = { id: 1, ...dto };
-    mockPrismaService.role.create.mockResolvedValue(roleEsperado);
-
-    const resultado = await service.create(dto);
-
-    expect(resultado).toEqual(roleEsperado);
-    expect(prisma.role.create).toHaveBeenCalledWith({ data: dto });
+  it('cria cargo', async () => {
+    prismaMock.role.create.mockResolvedValue(makeRole());
+    await service.create({ name: 'Secretaria' });
+    expect(prismaMock.role.create.mock.calls[0][0].data).toEqual({ name: 'Secretaria' });
   });
 
-  it('deve lançar ConflictException se o nome já existir (P2002)', async () => {
-    const dto = { name: 'Secretaria' };
-    const erroPrisma = new Prisma.PrismaClientKnownRequestError('Unique constraint', {
-      code: 'P2002',
-      clientVersion: '5.0.0',
-    });
-    mockPrismaService.role.create.mockRejectedValue(erroPrisma);
-
-    await expect(service.create(dto)).rejects.toThrow(ConflictException);
+  it('409 se o nome já existe (P2002)', async () => {
+    prismaMock.role.create.mockRejectedValue(prismaError('P2002'));
+    await expect(service.create({ name: 'Secretaria' })).rejects.toThrow(ConflictException);
   });
 
-  it('deve lançar NotFoundException se o cargo não existir', async () => {
-    mockPrismaService.role.findUnique.mockResolvedValue(null);
-
+  it('404 se não existe', async () => {
+    prismaMock.role.findUnique.mockResolvedValue(null);
     await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
   });
 
-  it('deve retornar o cargo quando encontrado', async () => {
-    const role = { id: 1, name: 'Admin Geral' };
-    mockPrismaService.role.findUnique.mockResolvedValue(role);
+  describe('update', () => {
+    it('409 ao renomear cargo base', async () => {
+      prismaMock.role.findUnique.mockResolvedValue(makeRole({ isBase: true, name: 'Admin Geral' }));
+      await expect(service.update(1, { name: 'Outro' })).rejects.toThrow(ConflictException);
+      expect(prismaMock.role.update).not.toHaveBeenCalled();
+    });
 
-    const resultado = await service.findOne(1);
+    it('permite editar a descrição de cargo base', async () => {
+      prismaMock.role.findUnique.mockResolvedValue(makeRole({ isBase: true }));
+      prismaMock.role.update.mockResolvedValue(makeRole());
+      await service.update(1, { description: 'nova' });
+      expect(prismaMock.role.update).toHaveBeenCalled();
+    });
 
-    expect(resultado).toEqual(role);
+    it('permite renomear cargo não-base', async () => {
+      prismaMock.role.findUnique.mockResolvedValue(makeRole());
+      prismaMock.role.update.mockResolvedValue(makeRole({ name: 'Novo' }));
+      await service.update(1, { name: 'Novo' });
+      expect(prismaMock.role.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('remove (UC006)', () => {
+    it('409 se há usuários vinculados', async () => {
+      prismaMock.role.findUnique.mockResolvedValue(makeRole({ _count: { users: 2 } }));
+      await expect(service.remove(1)).rejects.toThrow(/2 usuário/);
+      expect(prismaMock.role.delete).not.toHaveBeenCalled();
+    });
+
+    it('409 ao remover cargo base sem confirmação', async () => {
+      prismaMock.role.findUnique.mockResolvedValue(makeRole({ isBase: true }));
+      await expect(service.remove(1)).rejects.toThrow(ConflictException);
+    });
+
+    it('remove cargo base com confirmBase=true', async () => {
+      prismaMock.role.findUnique.mockResolvedValue(makeRole({ isBase: true }));
+      prismaMock.role.delete.mockResolvedValue(makeRole());
+      await service.remove(1, true);
+      expect(prismaMock.role.delete).toHaveBeenCalled();
+    });
+
+    it('409 se um usuário foi vinculado durante a remoção (P2003)', async () => {
+      prismaMock.role.findUnique.mockResolvedValue(makeRole());
+      prismaMock.role.delete.mockRejectedValue(prismaError('P2003'));
+      await expect(service.remove(1)).rejects.toThrow(ConflictException);
+    });
   });
 });

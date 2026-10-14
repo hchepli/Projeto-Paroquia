@@ -1,53 +1,51 @@
-// src/auth/auth.service.ts
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '../../generated/prisma/client';
+import { JWT_EXPIRES_IN_SECONDS } from './auth.constants';
+
+// Hash fictício: quando o e-mail não existe, ainda rodamos o bcrypt
+// para o tempo de resposta não revelar quais e-mails existem.
+const DUMMY_HASH = bcrypt.hashSync('timing-attack-dummy', 10);
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService
   ) {}
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      return null;
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user?.passwordHash ?? DUMMY_HASH,
+    );
+
+    if (!user || !passwordMatches) {
+      return null; // UC007 3a: erro genérico
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.passwordHash);
-    if (!passwordMatches) {
-      return null;
-    }
-
-    // RN004/UC007 fluxo 3b: usuário inativo não pode logar
+    // UC007 3b: só revelamos "inativa" depois de a senha estar correta
     if (user.status === 'INACTIVE') {
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException(
+        'Conta inativa. Procure a secretaria da paróquia.',
+      );
     }
 
     const { passwordHash, ...result } = user;
     return result;
   }
 
-async login(user: { id: string; email: string; roleId: number }) {
-  const role = await this.prisma.role.findUnique({ where: { id: user.roleId } });
-  const fullUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+  // Sem queries: cargo e pastoral são lidos do banco a cada
+  // requisição pela JwtStrategy, então o token só carrega a identidade.
+  login(user: { id: string; email: string }) {
+    const payload = { sub: user.id, email: user.email };
 
-  const payload = {
-    sub: user.id,
-    email: user.email,
-    roleId: user.roleId,
-    roleName: role?.name,
-    pastoralGroupId: fullUser?.pastoralGroupId ?? null,
-  };
-
-  return {
-    access_token: this.jwtService.sign(payload),
-  };
-}
+    return {
+      access_token: this.jwtService.sign(payload),
+      expires_in: JWT_EXPIRES_IN_SECONDS,
+    };
+  }
 }

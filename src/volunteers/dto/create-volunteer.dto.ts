@@ -1,42 +1,45 @@
+// src/volunteers/dto/create-volunteer.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, MaxLength, IsOptional, IsInt } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsEmail,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import { emailToNull, trimString } from '../../common/transformers/string.transformers';
+
+export const PHONE_REGEX = /^[0-9()+\-\s]{8,20}$/;
 
 export class CreateVolunteerDto {
-    @ApiProperty({
-        description: 'Nome do voluntário',
-        example: 'Voluntário de Teste',
-        maxLength: 150,
-    })
-    @IsString()
-    @IsNotEmpty()
-    @MaxLength(150)
-    name!: string;
+  @ApiProperty({ example: 'Maria Oliveira', maxLength: 150 })
+  @Transform(trimString)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(150)
+  name!: string;
 
-    @ApiPropertyOptional({
-        description: 'Email do voluntário',
-        example: 'voluntario@teste.com',
-        maxLength: 255,
-    })
-    @IsString()
-    @IsOptional()
-    @MaxLength(255)
-    email?: string;
+  @ApiPropertyOptional({ example: 'maria@exemplo.com', maxLength: 180, nullable: true })
+  @Transform(emailToNull)
+  @IsOptional()
+  @IsEmail({}, { message: 'E-mail inválido.' })
+  @MaxLength(180)
+  email?: string | null;
 
-    @ApiProperty({
-        description: 'Telefone do voluntário',
-        example: '(11) 99999-9999',
-        maxLength: 20,
-    })
-    @IsString()
-    @IsNotEmpty()
-    @MaxLength(20)
-    phone!: string;
+  @ApiProperty({ example: '(47) 99999-9999', maxLength: 20 })
+  @Transform(trimString)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(PHONE_REGEX, { message: 'Telefone inválido. Use de 8 a 20 caracteres (números, espaço, +, -, parênteses).' })
+  phone!: string;
 
-    @ApiProperty({
-        description: 'ID da Pastoral à qual o voluntário está vinculado (RN006/RN009 — obrigatório, 1:N)',
-        example: 1,
-    })
-    @IsInt()
-    @IsNotEmpty()
-    pastoralGroupId!: number;
+  @ApiProperty({ description: 'Pastoral do voluntário (RN006/RN009 — obrigatório, 1:N)', example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pastoralGroupId!: number;
 }

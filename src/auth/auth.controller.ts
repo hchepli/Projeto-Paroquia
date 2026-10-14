@@ -1,11 +1,14 @@
-// src/auth/auth.controller.ts
-import { Controller, Post, Request, UseGuards, Get, Req } from '@nestjs/common';
+import { Controller, Get, Post, Req, Request, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LoginBodyGuard } from './guards/login-body.guard';
+import { LoginThrottlerGuard } from './guards/login-throttler.guard';
 import { Public } from './decorators/public.decorator';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { LoginDto } from './dto/login.dto';
+import type { AuthenticatedRequest, LoginRequest } from './types/authenticated-request';
 
 @Controller('auth')
 export class AuthController {
@@ -14,17 +17,19 @@ export class AuthController {
     private readonly usersService: UsersService,
   ) {}
 
+  // Ordem: rate limit -> formato do corpo -> credenciais
   @Public()
-  @UseGuards(LocalAuthGuard)
+  @UseGuards(LoginThrottlerGuard, LoginBodyGuard, LocalAuthGuard)
+  @ApiBody({ type: LoginDto })
   @Post('login')
-  async login(@Request() req) {
+  login(@Request() req: LoginRequest) {
     return this.authService.login(req.user);
   }
 
   @ApiBearerAuth()
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  getMe(@Req() req) {
-    return this.usersService.findOnePublic(req.user.userId);
+  getMe(@Req() req: AuthenticatedRequest) {
+    return this.usersService.findOne(req.user.userId);
   }
 }
