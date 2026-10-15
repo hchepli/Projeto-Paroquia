@@ -8,12 +8,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
+  const { searchParams } = new URL(req.url);
+  const qs = searchParams.get('removeFuture') === 'true' ? '?removeFuture=true' : '';
+
   const body = await req.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
   }
 
-  const backendRes = await apiFetch(`/mass-templates/${id}`, {
+  const backendRes = await apiFetch(`/mass-templates/${id}${qs}`, {
     token,
     method: 'PATCH',
     body: JSON.stringify(body),

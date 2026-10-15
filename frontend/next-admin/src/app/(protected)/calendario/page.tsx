@@ -6,13 +6,15 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import MonthGrid from '@/components/ui/calendar/MonthGrid';
-import MassFormModal, { MassDto } from '@/components/ui/forms/MassFormModal';
+import MassFormModal from '@/components/ui/forms/MassFormModal';
 import EventFormModal, { EventDto } from '@/components/ui/forms/EventFormModal';
 import AgendaTimeline, { AgendaItem } from '@/components/ui/calendar/AgendaTimeline';
 import { getMonthLabel, getDaysInMonth, getFirstWeekdayOffset } from '@/lib/date/calendar';
+import { isSameLocalDay } from '@/lib/date/datetime';
+import { getErrorMessage, throwApiError } from '@/lib/errors';
 import { useCalendar } from '@/hooks/calendar/useCalendar';
+import { usePermissions } from '@/hooks/auth/usePermissions';
 import { CalendarItem } from '@/types/calendar/calendar-item';
-
 
 function getMonthRange(date: Date) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
@@ -36,54 +38,44 @@ function toAgendaItem(item: CalendarItem): AgendaItem<CalendarItem> {
   };
 }
 
-// Busca o registro completo (Mass ou Event) só quando o usuário clica num
-// item da agenda — CalendarItem não carrega os campos que o modal precisa
-// (location, notes, pastoralGroups, etc). ASSUMIDO: GET /masses/:id e
-// GET /events/:id existem e devolvem o objeto completo com `pastoralGroups`.
-async function fetchMassById(id: number): Promise<MassDto> {
-  const res = await fetch(`/api/masses/${id}`);
-  if (!res.ok) throw new Error('Erro ao buscar missa.');
-  return res.json();
-}
-
+// CalendarItem não carrega os campos do modal de Evento (location, etc.),
+// então o registro completo é buscado ao clicar. Missa busca sozinha dentro
+// do MassFormModal (useMass).
 async function fetchEventById(id: number): Promise<EventDto> {
   const res = await fetch(`/api/events/${id}`);
-  if (!res.ok) throw new Error('Erro ao buscar evento.');
+  if (!res.ok) await throwApiError(res, 'Erro ao buscar evento.');
   return res.json();
 }
 
 export default function CalendarioPage() {
   const router = useRouter();
+  const { canManageMasses } = usePermissions();
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
-
-  const [openModal, setOpenModal] = useState<'mass' | 'event' | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [massId, setMassId] = useState<number | null>(null);
+  const [eventId, setEventId] = useState<number | null>(null);
 
   const { start, end } = useMemo(() => getMonthRange(currentDate), [currentDate]);
-  const { data: items, isLoading } = useCalendar(start, end);
+  const { data: items, isLoading, isError, error, refetch } = useCalendar(start, end);
 
-  const { data: editingMass, isFetching: loadingMass } = useQuery({
-    queryKey: ['masses', editingId],
-    queryFn: () => fetchMassById(editingId!),
-    enabled: openModal === 'mass' && editingId !== null,
-  });
-
-  const { data: editingEvent, isFetching: loadingEvent } = useQuery({
-    queryKey: ['events', editingId],
-    queryFn: () => fetchEventById(editingId!),
-    enabled: openModal === 'event' && editingId !== null,
+  const {
+    data: editingEvent,
+    isError: eventError,
+    error: eventErrorObj,
+  } = useQuery({
+    queryKey: ['events', eventId],
+    queryFn: () => fetchEventById(eventId!),
+    enabled: eventId !== null,
   });
 
   function handleAgendaItemClick(item: AgendaItem<CalendarItem>) {
     if (!item.id || !item.entityType) return;
-    setEditingId(item.id);
-    setOpenModal(item.entityType);
-  }
-
-  function handleCloseModal() {
-    setOpenModal(null);
-    setEditingId(null);
+    if (item.entityType === 'mass') {
+      setMassId(item.id);
+    } else {
+      setEventId(item.id);
+    }
   }
 
   function handlePrevMonth() {
@@ -99,20 +91,24 @@ export default function CalendarioPage() {
   const selectedDayItems = useMemo(
     () =>
       (items ?? [])
-        .filter((item) => new Date(item.date).getDate() === selectedDay)
+        .filter((item) => isSameLocalDay(item.date, currentDate, selectedDay))
         .map(toAgendaItem),
-    [items, selectedDay],
+    [items, currentDate, selectedDay],
   );
+
+  const headerActions = [
+    ...(canManageMasses
+      ? [{ label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') }]
+      : []),
+    { label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
+  ];
 
   return (
     <>
       <Header
         title="Calendário"
         description="Gerencie todos os eventos e missas da paróquia!"
-        actions={[
-          { label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') },
-          { label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
-        ]}
+        actions={headerActions}
       />
 
       <div className="mt-8 flex items-start gap-6">
@@ -121,6 +117,7 @@ export default function CalendarioPage() {
             <button
               onClick={handlePrevMonth}
               className="rounded border p-1.5 text-gray-600 hover:bg-gray-50"
+              aria-label="Mês anterior"
             >
               <ChevronLeft size={18} />
             </button>
@@ -128,6 +125,7 @@ export default function CalendarioPage() {
             <button
               onClick={handleNextMonth}
               className="rounded border p-1.5 text-gray-600 hover:bg-gray-50"
+              aria-label="Próximo mês"
             >
               <ChevronRight size={18} />
             </button>
@@ -135,6 +133,13 @@ export default function CalendarioPage() {
 
           {isLoading ? (
             <p className="text-sm text-gray-400">Carregando...</p>
+          ) : isError ? (
+            <p className="text-sm text-red-600">
+              {getErrorMessage(error, 'Erro ao carregar o calendário.')}{' '}
+              <button onClick={() => refetch()} className="underline">
+                Tentar novamente
+              </button>
+            </p>
           ) : (
             <MonthGrid
               daysInMonth={getDaysInMonth(currentDate)}
@@ -151,19 +156,20 @@ export default function CalendarioPage() {
           <p className="mb-4 text-[14px] font-semibold text-gray-700">
             {selectedDay} de {getMonthLabel(currentDate)}
           </p>
+          {eventError && (
+            <p className="mb-2 text-sm text-red-600">
+              {getErrorMessage(eventErrorObj, 'Erro ao buscar evento.')}
+            </p>
+          )}
           <AgendaTimeline items={selectedDayItems} onItemClick={handleAgendaItemClick} />
         </div>
       </div>
 
-      <MassFormModal
-        open={openModal === 'mass'}
-        mass={editingId ? editingMass : null}
-        onClose={handleCloseModal}
-      />
+      <MassFormModal open={massId !== null} massId={massId} onClose={() => setMassId(null)} />
       <EventFormModal
-        open={openModal === 'event'}
-        event={editingId ? editingEvent : null}
-        onClose={handleCloseModal}
+        open={eventId !== null && Boolean(editingEvent)}
+        event={editingEvent ?? null}
+        onClose={() => setEventId(null)}
       />
     </>
   );

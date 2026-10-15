@@ -10,10 +10,12 @@ import Card from '@/components/ui/cards/Card';
 import Table from '@/components/ui/tables/Table';
 import EventsTable from '@/components/ui/tables/EventsTable';
 import CalendarSidebar from '@/components/ui/calendar/CalendarSidebar';
-import MassFormModal, { MassDto } from '@/components/ui/forms/MassFormModal';
+import MassFormModal from '@/components/ui/forms/MassFormModal';
 import EventFormModal, { EventDto } from '@/components/ui/forms/EventFormModal';
 import { AgendaItem } from '@/components/ui/calendar/AgendaTimeline';
 import { getMonthLabel, getDaysInMonth, getFirstWeekdayOffset } from '@/lib/date/calendar';
+import { isSameLocalDay } from '@/lib/date/datetime';
+import { throwApiError } from '@/lib/errors';
 import { useMasses } from '@/hooks/masses/useMasses';
 import { useEvents } from '@/hooks/events/useEvents';
 import { useAuditLogs } from '@/hooks/audit-logs/useAuditLogs';
@@ -23,6 +25,7 @@ import { usePhotos } from '@/hooks/photos/usePhotos';
 import { useSchedulesSummary } from '@/hooks/schedules/useSchedulesSummary';
 import { usePendingSchedules } from '@/hooks/schedules/usePendingSchedules';
 import { useMassesWithoutPastoral } from '@/hooks/masses/useMassesWithoutPastoral';
+import { usePermissions } from '@/hooks/auth/usePermissions';
 import { CalendarItem } from '@/types/calendar/calendar-item';
 import { mapAuditLogToRow } from '@/lib/audit-log-mapper';
 
@@ -75,26 +78,21 @@ function formatShortDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 
-async function fetchMassById(id: number): Promise<MassDto> {
-  const res = await fetch(`/api/masses/${id}`);
-  if (!res.ok) throw new Error('Erro ao buscar missa.');
-  return res.json();
-}
-
 async function fetchEventById(id: number): Promise<EventDto> {
   const res = await fetch(`/api/events/${id}`);
-  if (!res.ok) throw new Error('Erro ao buscar evento.');
+  if (!res.ok) await throwApiError(res, 'Erro ao buscar evento.');
   return res.json();
 }
 
 export default function PainelPage() {
   const router = useRouter();
+  const { canManageMasses } = usePermissions();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
 
-  const [openModal, setOpenModal] = useState<'mass' | 'event' | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [massId, setMassId] = useState<number | null>(null);
+  const [eventId, setEventId] = useState<number | null>(null);
 
   const { startISO, endISO } = useMemo(() => getTodayRange(), []);
   const { data: massesResult, isLoading: massesLoading } = useMasses({
@@ -108,12 +106,12 @@ export default function PainelPage() {
   const { start, end } = useMemo(() => getMonthRange(currentDate), [currentDate]);
   const { data: calendarItems } = useCalendar(start, end);
 
-  // Missas do mês corrente sem Pastoral vinculada (RN017 proposta) —
-  // endpoint dedicado GET /masses/without-pastoral, não inflaciona o
-  // payload das outras listagens de Missa.
+  // Missas do mês sem Pastoral vinculada (RN017 proposta). Endpoint restrito a
+  // Admin Geral/Secretaria: para os demais cargos nem dispara (evita 403).
   const { data: massesWithoutPastoralResult } = useMassesWithoutPastoral({
     startDate: start,
     endDate: end,
+    enabled: canManageMasses,
   });
 
   // Escalas do mês corrente (Admin Geral/Secretaria veem todas, sem filtro de pastoral).
@@ -126,27 +124,19 @@ export default function PainelPage() {
   // Fotos na galeria nos últimos 30 dias.
   const { data: photos = [] } = usePhotos();
 
-  const { data: editingMass } = useQuery({
-    queryKey: ['masses', editingId],
-    queryFn: () => fetchMassById(editingId!),
-    enabled: openModal === 'mass' && editingId !== null,
-  });
-
   const { data: editingEvent } = useQuery({
-    queryKey: ['events', editingId],
-    queryFn: () => fetchEventById(editingId!),
-    enabled: openModal === 'event' && editingId !== null,
+    queryKey: ['events', eventId],
+    queryFn: () => fetchEventById(eventId!),
+    enabled: eventId !== null,
   });
 
   function handleAgendaItemClick(item: AgendaItem<CalendarItem>) {
     if (!item.id || !item.entityType) return;
-    setEditingId(item.id);
-    setOpenModal(item.entityType);
-  }
-
-  function handleCloseModal() {
-    setOpenModal(null);
-    setEditingId(null);
+    if (item.entityType === 'mass') {
+      setMassId(item.id);
+    } else {
+      setEventId(item.id);
+    }
   }
 
   function handlePrevMonth() {
@@ -191,20 +181,24 @@ export default function PainelPage() {
   const agendaItems = useMemo(
     () =>
       (calendarItems ?? [])
-        .filter((item) => new Date(item.date).getDate() === selectedDay)
+        .filter((item) => isSameLocalDay(item.date, currentDate, selectedDay))
         .map(toAgendaItem),
-    [calendarItems, selectedDay],
+    [calendarItems, currentDate, selectedDay],
   );
+
+  const headerActions = [
+    ...(canManageMasses
+      ? [{ label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') }]
+      : []),
+    { label: 'Criar Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
+  ];
 
   return (
     <>
       <Header
         title="Painel Admin"
         description="Seja Bem Vindo ao Painel Administrativo da Paróquia!"
-        actions={[
-          { label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') },
-          { label: 'Criar Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
-        ]}
+        actions={headerActions}
       />
 
       <div className="flex gap-6 items-start mt-8">
@@ -238,13 +232,15 @@ export default function PainelPage() {
               description="Nos próximos 30 dias"
               onClick={() => router.push('/comunidade/eventos')}
             />
-            <Card
-              icon={AlertTriangle}
-              title="Missas sem Pastoral"
-              value={massesWithoutPastoralCount}
-              description="Este mês"
-              onClick={() => router.push('/calendario')}
-            />
+            {canManageMasses && (
+              <Card
+                icon={AlertTriangle}
+                title="Missas sem Pastoral"
+                value={massesWithoutPastoralCount}
+                description="Este mês"
+                onClick={() => router.push('/calendario')}
+              />
+            )}
             <Card
               icon={EyeOff}
               title="Avisos pendentes"
@@ -292,15 +288,11 @@ export default function PainelPage() {
         </div>
       </div>
 
-      <MassFormModal
-        open={openModal === 'mass'}
-        mass={editingId ? editingMass : null}
-        onClose={handleCloseModal}
-      />
+      <MassFormModal open={massId !== null} massId={massId} onClose={() => setMassId(null)} />
       <EventFormModal
-        open={openModal === 'event'}
-        event={editingId ? editingEvent : null}
-        onClose={handleCloseModal}
+        open={eventId !== null && Boolean(editingEvent)}
+        event={editingEvent ?? null}
+        onClose={() => setEventId(null)}
       />
     </>
   );

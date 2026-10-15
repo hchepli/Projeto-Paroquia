@@ -1,3 +1,4 @@
+// src/types/masses/mass-template.ts
 import { MassType } from './masses';
 
 export interface MassTemplate {
@@ -19,3 +20,14 @@ export interface CreateMassTemplatePayload {
   type: MassType;
   notes?: string;
 }
+
+/** PATCH não aceita dayOfWeek nem time (o back responde 400). */
+export type UpdateMassTemplatePayload = Partial<
+  Pick<MassTemplate, 'title' | 'location' | 'type' | 'notes' | 'active'>
+>;
+
+/** Resposta do PATCH ao desativar com ?removeFuture=true. */
+export type MassTemplateUpdateResult = MassTemplate & {
+  removed?: number;
+  keptWithSchedule?: number;
+};

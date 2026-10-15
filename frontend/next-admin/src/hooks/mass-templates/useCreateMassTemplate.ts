@@ -1,28 +1,15 @@
 // src/hooks/mass-templates/useCreateMassTemplate.ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { MassTemplate } from '@/types/masses/mass-template';
+import { CreateMassTemplatePayload, MassTemplate } from '@/types/masses/mass-template';
+import { throwApiError } from '@/lib/errors';
 
-export interface CreateMassTemplateInput {
-  dayOfWeek: number;
-  time: string;
-  title: string;
-  location: string;
-  type: string;
-  notes?: string;
-}
-
-async function createMassTemplate(input: CreateMassTemplateInput): Promise<MassTemplate> {
+async function createMassTemplate(input: CreateMassTemplatePayload): Promise<MassTemplate> {
   const res = await fetch('/api/mass-templates', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.message ?? 'Erro ao criar missa recorrente.');
-  }
-
+  if (!res.ok) await throwApiError(res, 'Erro ao criar missa recorrente.');
   return res.json();
 }
 
@@ -33,6 +20,7 @@ export function useCreateMassTemplate() {
     mutationFn: createMassTemplate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['masses'] });
       queryClient.invalidateQueries({ queryKey: ['mass-templates'] });
     },
   });

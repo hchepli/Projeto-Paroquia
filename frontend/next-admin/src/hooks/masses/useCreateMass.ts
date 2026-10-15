@@ -1,14 +1,7 @@
 // src/hooks/masses/useCreateMass.ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mass } from '@/types/masses/masses';
-
-export interface CreateMassInput {
-  title: string;
-  dateTime: string;
-  type: string;
-  location: string;
-  notes?: string;
-}
+import { CreateMassInput, Mass } from '@/types/masses/masses';
+import { throwApiError } from '@/lib/errors';
 
 async function createMass(input: CreateMassInput): Promise<Mass> {
   const res = await fetch('/api/masses', {
@@ -16,12 +9,7 @@ async function createMass(input: CreateMassInput): Promise<Mass> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.message ?? 'Erro ao criar missa.');
-  }
-
+  if (!res.ok) await throwApiError(res, 'Erro ao criar missa.');
   return res.json();
 }
 
@@ -33,6 +21,7 @@ export function useCreateMass() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.invalidateQueries({ queryKey: ['masses'] });
+      queryClient.invalidateQueries({ queryKey: ['schedules'] });
     },
   });
 }

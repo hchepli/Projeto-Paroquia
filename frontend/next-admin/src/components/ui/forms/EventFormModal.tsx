@@ -6,6 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/ui/modals/Modal';
 import MassSearchCombobox from '@/components/ui/inputs/MassSearchCombobox';
 import PastoralGroupsMultiSelect from '@/components/ui/inputs/PastoralGroupsMultiSelect';
+import { toDateTimeLocalValue, toIsoWithOffset } from '@/lib/date/datetime';
+import { getErrorMessage, throwApiError } from '@/lib/errors';
 
 export interface EventDto {
   id: number;
@@ -37,14 +39,6 @@ async function fetchCategories(): Promise<Category[]> {
     throw new Error('Erro ao buscar categorias');
   }
   return response.json();
-}
-
-function toDateTimeLocalValue(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
 }
 
 export default function EventFormModal({ open, onClose, event }: EventFormModalProps) {
@@ -115,7 +109,7 @@ export default function EventFormModal({ open, onClose, event }: EventFormModalP
     // na edição. ATENÇÃO: isso só é seguro se o service do NestJS fizer "set"
     // (substitui a lista inteira) em vez de "connect" (só adiciona). Se for
     // "connect", reenviar os mesmos IDs em toda edição vai duplicar vínculo
-    // ou estourar unique constraint — CONFIRMAR no backend.
+    // ou estourar unique constraint — CONFIRMAR no backend (Dia 5).
     if (!isEditing && pastoralGroupIds.length === 0) return;
 
     const linkResponse = await fetch(`/api/events/${eventId}/pastoral-groups`, {
@@ -147,8 +141,8 @@ export default function EventFormModal({ open, onClose, event }: EventFormModalP
       const payload = {
         name,
         description: description || undefined,
-        startDate: new Date(startDate).toISOString(),
-        endDate: endDate ? new Date(endDate).toISOString() : undefined,
+        startDate: toIsoWithOffset(startDate),
+        endDate: endDate ? toIsoWithOffset(endDate) : undefined,
         location,
         categoryId: categoryId ? Number(categoryId) : undefined,
         massId: massId ? Number(massId) : undefined,
@@ -164,9 +158,9 @@ export default function EventFormModal({ open, onClose, event }: EventFormModalP
       });
 
       if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(
-          body?.message ?? (isEditing ? 'Erro ao atualizar evento.' : 'Erro ao criar evento.'),
+        await throwApiError(
+          response,
+          isEditing ? 'Erro ao atualizar evento.' : 'Erro ao criar evento.',
         );
       }
 
@@ -177,7 +171,7 @@ export default function EventFormModal({ open, onClose, event }: EventFormModalP
       await queryClient.invalidateQueries({ queryKey: ['events'] });
       handleClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao salvar.');
+      setError(getErrorMessage(err, 'Erro ao salvar.'));
     } finally {
       setSubmitting(false);
     }

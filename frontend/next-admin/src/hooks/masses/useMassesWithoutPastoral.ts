@@ -1,9 +1,13 @@
+// src/hooks/masses/useMassesWithoutPastoral.ts
 import { useQuery } from '@tanstack/react-query';
-import { Mass } from '@/types/masses/masses'; // ajustar path se o tipo Mass estiver em outro lugar
+import { Mass } from '@/types/masses/masses';
+import { throwApiError } from '@/lib/errors';
 
 interface UseMassesWithoutPastoralParams {
   startDate: string;
   endDate: string;
+  /** Endpoint restrito a Admin Geral/Secretaria: passe false para os demais cargos. */
+  enabled?: boolean;
 }
 
 interface MassesWithoutPastoralResult {
@@ -12,20 +16,25 @@ interface MassesWithoutPastoralResult {
 }
 
 async function fetchMassesWithoutPastoral(
-  params: UseMassesWithoutPastoralParams,
+  params: Pick<UseMassesWithoutPastoralParams, 'startDate' | 'endDate'>,
 ): Promise<MassesWithoutPastoralResult> {
   const searchParams = new URLSearchParams();
   searchParams.set('startDate', params.startDate);
   searchParams.set('endDate', params.endDate);
 
   const res = await fetch(`/api/masses/without-pastoral?${searchParams.toString()}`);
-  if (!res.ok) throw new Error('Erro ao buscar missas sem pastoral.');
+  if (!res.ok) await throwApiError(res, 'Erro ao buscar missas sem pastoral.');
   return res.json();
 }
 
-export function useMassesWithoutPastoral(params: UseMassesWithoutPastoralParams) {
+export function useMassesWithoutPastoral({
+  startDate,
+  endDate,
+  enabled = true,
+}: UseMassesWithoutPastoralParams) {
   return useQuery({
-    queryKey: ['masses', 'without-pastoral', params],
-    queryFn: () => fetchMassesWithoutPastoral(params),
+    queryKey: ['masses', 'without-pastoral', { startDate, endDate }],
+    queryFn: () => fetchMassesWithoutPastoral({ startDate, endDate }),
+    enabled,
   });
 }
