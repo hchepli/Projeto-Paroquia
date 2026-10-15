@@ -1,22 +1,33 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+// src/mass-templates/mass-templates.service.ts
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
 import { CreateMassTemplateDto } from './dto/create-mass-template.dto';
 import { UpdateMassTemplateDto } from './dto/update-mass-template.dto';
+import { computeOccurrences } from './utils/mass-occurrences.util';
 
-const WEEKS_AHEAD = 8;
+export const MIN_WEEKS_AHEAD = 8;
+export const MAX_WEEKS_AHEAD = 26; // teto: o GET público não pode materializar o que o cliente pedir
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const SLOT_TAKEN = 'Já existe uma recorrência com esse dia, horário e local.';
 
 @Injectable()
 export class MassTemplatesService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  create(dto: CreateMassTemplateDto) {
-    return this.prismaService.massTemplate.create({ data: dto });
+  async create(dto: CreateMassTemplateDto) {
+    try {
+      return await this.prismaService.massTemplate.create({ data: dto });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(SLOT_TAKEN);
+      }
+      throw error;
+    }
   }
 
   findAll() {
-    return this.prismaService.massTemplate.findMany({
-      orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
-    });
+    return this.prismaService.massTemplate.findMany({ orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }] });
   }
 
   async findOne(id: number) {
@@ -25,103 +36,85 @@ export class MassTemplatesService {
     return template;
   }
 
-  async update(id: number, dto: UpdateMassTemplateDto) {
-    await this.findOne(id);
-    return this.prismaService.massTemplate.update({ where: { id }, data: dto });
+  /**
+   * Desativar com removeFuture=true apaga as ocorrências futuras SEM escala
+   * (RN016: as com escala são mantidas e devolvidas em keptWithSchedule).
+   */
+  async update(id: number, dto: UpdateMassTemplateDto, removeFuture = false) {
+    if (removeFuture && dto.active !== false) {
+      throw new BadRequestException('removeFuture só pode ser usado junto com active=false.');
+    }
+
+    try {
+      return await this.prismaService.$transaction(async (tx) => {
+        const exists = await tx.massTemplate.findUnique({ where: { id }, select: { id: true } });
+        if (!exists) throw new NotFoundException(`MassTemplate ${id} não encontrado`);
+
+        const template = await tx.massTemplate.update({ where: { id }, data: dto });
+        if (!removeFuture) return template;
+
+        const future = { generatedFromTemplateId: id, dateTime: { gt: new Date() } };
+        const removed = await tx.mass.deleteMany({ where: { ...future, schedules: { none: {} } } });
+        const keptWithSchedule = await tx.mass.count({ where: { ...future, schedules: { some: {} } } });
+        return { ...template, removed: removed.count, keptWithSchedule };
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(SLOT_TAKEN);
+      }
+      throw error;
+    }
   }
 
-  // Sem remove(): exclusão de template com Mass já gerada é bloqueada pela FK
-  // (decisão travada: sem onDelete). Fluxo esperado é desativar (active=false)
-  // via update(), não excluir. Se quiser um endpoint de exclusão para
-  // templates SEM nenhuma Mass gerada ainda, avisar que isso é uma adição
-  // separada, não assumida aqui.
-
   /**
-   * Garante que todas as ocorrências de templates ativos, entre agora e
-   * `untilDate` (ou pelo menos WEEKS_AHEAD semanas a partir de hoje, o que
-   * for mais distante), já existem como Mass real no banco.
+   * Materializa as ocorrências de templates ativos até `untilDate`, respeitando
+   * o mínimo de 8 e o teto de 26 semanas. Idempotente e seguro sob concorrência:
+   * a defesa real é o UNIQUE (template, templateOccurrenceAt) + skipDuplicates.
    *
-   * Idempotente: cada ocorrência é identificada por
-   * (generatedFromTemplateId + dateTime exata calculada). Chamar de novo
-   * para o mesmo período não duplica.
+   * Ordem de leitura importa: Mass ANTES de Skip. Se a exclusão de uma ocorrência
+   * (Mass removida + skip gravado, atômicos) cair no meio, nunca enxergamos
+   * "sem Mass e sem Skip" ao mesmo tempo.
    */
-  async ensureGenerated(untilDate: Date): Promise<void> {
-    const now = new Date();
-    const minHorizon = new Date(now);
-    minHorizon.setDate(minHorizon.getDate() + WEEKS_AHEAD * 7);
+  async ensureGenerated(untilDate: Date, now: Date = new Date()): Promise<void> {
+    const minHorizon = new Date(now.getTime() + MIN_WEEKS_AHEAD * WEEK_MS);
+    const maxHorizon = new Date(now.getTime() + MAX_WEEKS_AHEAD * WEEK_MS);
+    let horizon = untilDate > minHorizon ? untilDate : minHorizon;
+    if (horizon > maxHorizon) horizon = maxHorizon;
 
-    const horizon = untilDate > minHorizon ? untilDate : minHorizon;
+    const templates = await this.prismaService.massTemplate.findMany({ where: { active: true } });
 
-    const activeTemplates = await this.prismaService.massTemplate.findMany({
-      where: { active: true },
-    });
-
-    if (activeTemplates.length === 0) return;
-
-    for (const template of activeTemplates) {
-      const occurrences = this.computeOccurrences(template, now, horizon);
+    for (const template of templates) {
+      const occurrences = computeOccurrences(template, now, horizon);
       if (occurrences.length === 0) continue;
 
       const existing = await this.prismaService.mass.findMany({
-        where: {
-          generatedFromTemplateId: template.id,
-          dateTime: { in: occurrences },
-        },
-        select: { dateTime: true },
+        where: { generatedFromTemplateId: template.id, templateOccurrenceAt: { in: occurrences } },
+        select: { templateOccurrenceAt: true },
+      });
+      const skipped = await this.prismaService.massTemplateSkip.findMany({
+        where: { templateId: template.id, occurrenceAt: { in: occurrences } },
+        select: { occurrenceAt: true },
       });
 
-      const existingTimes = new Set(existing.map((m) => m.dateTime.getTime()));
-      const missing = occurrences.filter((d) => !existingTimes.has(d.getTime()));
-
+      const taken = new Set<number>([
+        ...existing.map((m) => m.templateOccurrenceAt!.getTime()),
+        ...skipped.map((s) => s.occurrenceAt.getTime()),
+      ]);
+      const missing = occurrences.filter((d) => !taken.has(d.getTime()));
       if (missing.length === 0) continue;
 
       await this.prismaService.mass.createMany({
         data: missing.map((dateTime) => ({
           title: template.title,
           dateTime,
+          templateOccurrenceAt: dateTime, // identidade imutável; dateTime pode ser editado depois
           type: template.type,
           location: template.location,
           notes: template.notes,
           generatedFromTemplateId: template.id,
         })),
+        skipDuplicates: true,
       });
     }
-  }
-
-  /**
-   * Calcula as datas/horas exatas de ocorrência de um template entre
-   * `from` e `to` (inclusive), a partir de hoje (não gera ocorrências
-   * passadas).
-   */
-  private computeOccurrences(
-    template: { dayOfWeek: number; time: string },
-    from: Date,
-    to: Date,
-  ): Date[] {
-    const [hours, minutes] = template.time.split(':').map(Number);
-    const occurrences: Date[] = [];
-
-    // Ponto de partida: hoje, zerando hora/min/seg pra iterar dia a dia.
-    const cursor = new Date(from);
-    cursor.setHours(0, 0, 0, 0);
-
-    // Avança até o primeiro dia da semana correspondente.
-    const diff = (template.dayOfWeek - cursor.getDay() + 7) % 7;
-    cursor.setDate(cursor.getDate() + diff);
-
-    while (cursor <= to) {
-      const occurrence = new Date(cursor);
-      occurrence.setHours(hours, minutes, 0, 0);
-
-      // Só gera se a ocorrência (com horário aplicado) ainda está no futuro
-      // em relação a `from` (evita gerar "hoje às 08:00" se já são 20:00).
-      if (occurrence >= from) {
-        occurrences.push(occurrence);
-      }
-
-      cursor.setDate(cursor.getDate() + 7);
-    }
-
-    return occurrences;
   }
 }

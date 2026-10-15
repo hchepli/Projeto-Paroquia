@@ -1,17 +1,12 @@
-// src/masses/dto/mass-query.dto.ts (novo arquivo)
-import { Type } from 'class-transformer';
-import { IsOptional, IsDateString } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+// src/masses/dto/mass-query.dto.ts
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
+import { IsIn, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { DateRangeQueryDto } from '../../common/dto/date-range-query.dto';
 
-export class MassQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ description: 'Início do período (dateTime da Missa)' })
+export class MassQueryDto extends IntersectionType(PaginationQueryDto, DateRangeQueryDto) {
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'asc' })
   @IsOptional()
-  @IsDateString()
-  startDate?: string;
-
-  @ApiPropertyOptional({ description: 'Fim do período (dateTime da Missa)' })
-  @IsOptional()
-  @IsDateString()
-  endDate?: string;
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc' = 'asc'; // missas: cronológico por padrão (M27)
 }

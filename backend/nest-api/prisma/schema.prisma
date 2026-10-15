@@ -174,17 +174,50 @@ model Mass {
   type      MassType @default(COMMON) @map("tipo")
   location  String   @map("local") @db.VarChar(180)
   notes     String?  @map("observacoes")
-  generatedFromTemplateId Int?     @map("generated_from_template_id") // preenchida só se veio de recorrência (Bloco 5)
+  generatedFromTemplateId Int?      @map("generated_from_template_id")
+  templateOccurrenceAt    DateTime? @map("template_occurrence_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  generatedFromTemplate MassTemplate? @relation(fields: [generatedFromTemplateId], references: [id])
+  generatedFromTemplate MassTemplate? @relation(fields: [generatedFromTemplateId], references: [id], onDelete: Restrict)
 
-  events    Event[]
-  schedules Schedule[]
+  events         Event[]
+  schedules      Schedule[]
   pastoralGroups MassPastoralGroup[]
 
+  @@unique([generatedFromTemplateId, templateOccurrenceAt], map: "uq_missa_ocorrencia_template")
   @@map("missas")
+}
+
+model MassTemplate {
+  id        Int      @id @default(autoincrement())
+  dayOfWeek Int      @map("day_of_week")
+  time      String   @db.VarChar(5)
+  title     String   @map("titulo") @db.VarChar(150)
+  location  String   @map("local") @db.VarChar(180)
+  type      MassType @default(COMMON) @map("tipo")
+  notes     String?  @map("observacoes")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  generatedMasses Mass[]
+  skips           MassTemplateSkip[]
+
+  @@unique([dayOfWeek, time, location], map: "uq_template_dia_hora_local")
+  @@map("missa_templates")
+}
+
+model MassTemplateSkip {
+  id           Int      @id @default(autoincrement())
+  templateId   Int      @map("template_id")
+  occurrenceAt DateTime @map("occurrence_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  template MassTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, occurrenceAt], map: "uq_template_skip")
+  @@map("missa_template_skips")
 }
 
 // ------------------------------------------------------------
@@ -395,21 +428,4 @@ model AuditLog {
   user User @relation(fields: [userId], references: [id])
 
   @@map("logs_auditoria")
-}
-
-model MassTemplate {
-  id        Int      @id @default(autoincrement())
-  dayOfWeek Int      @map("day_of_week") // 0 (domingo) a 6 (sábado)
-  time      String   @db.VarChar(5) // formato "HH:mm", ex: "19:00"
-  title     String   @map("titulo") @db.VarChar(150)
-  location  String   @map("local") @db.VarChar(180)
-  type      MassType @default(COMMON) @map("tipo")
-  notes     String?  @map("observacoes")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  generatedMasses Mass[]
-
-  @@map("missa_templates")
 }

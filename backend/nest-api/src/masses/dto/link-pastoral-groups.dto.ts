@@ -1,6 +1,6 @@
 // src/masses/dto/link-pastoral-groups.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { ArrayMinSize, IsArray, IsInt } from 'class-validator';
+import { ArrayMinSize, ArrayUnique, IsArray, IsInt } from 'class-validator';
 
 export class LinkPastoralGroupsDto {
   @ApiProperty({
@@ -9,6 +9,7 @@ export class LinkPastoralGroupsDto {
     description: 'IDs das Pastorais a vincular (substitui o vínculo atual)',
   })
   @IsArray()
+  @ArrayUnique()
   @ArrayMinSize(0)
   @IsInt({ each: true })
   pastoralGroupIds!: number[];

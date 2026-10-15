@@ -1,25 +1,28 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+// src/masses/masses.controller.ts
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { MassesService } from './masses.service';
 import { CreateMassDto } from './dto/create-mass.dto';
 import { UpdateMassDto } from './dto/update-mass.dto';
 import { LinkPastoralGroupsDto } from './dto/link-pastoral-groups.dto';
-import { MassesWithoutPastoralQueryDto } from './dto/masses-without-pastoral-query.dto';
+import { MassQueryDto } from './dto/mass-query.dto';
+import { RemoveMassQueryDto } from './dto/remove-mass-query.dto';
+import { DateRangeQueryDto } from '../common/dto/date-range-query.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ApiBearerAuth } from '@nestjs/swagger';
-import { MassQueryDto } from './dto/mass-query.dto';
 import { Auditable } from '../audit-logs/decorators/auditable.decorator';
 
+// Default da classe: só Admin Geral e Secretaria. Leituras públicas declaram @Public().
 @ApiBearerAuth()
+@Roles('Admin Geral', 'Secretaria')
 @Controller('masses')
 export class MassesController {
   constructor(private readonly massesService: MassesService) {}
 
   @Auditable('Mass')
-  @Roles('Admin Geral', 'Secretaria')
   @Post()
-  create(@Body() createMassDto: CreateMassDto) {
-    return this.massesService.create(createMassDto);
+  create(@Body() dto: CreateMassDto) {
+    return this.massesService.create(dto);
   }
 
   @Public()
@@ -28,40 +31,34 @@ export class MassesController {
     return this.massesService.findAll(query);
   }
 
-  // Card "Missas sem Pastoral" do Painel Admin (Bloco 8). Precisa vir ANTES
-  // de @Get(':id') — senão o Nest casa "without-pastoral" como se fosse um
-  // :id e quebra o endpoint. Restrito aos mesmos cargos que veem o Painel
-  // (dado agregado de gestão, não é conteúdo público).
-  @Roles('Admin Geral', 'Secretaria')
+  // Precisa vir ANTES de ':id'.
   @Get('without-pastoral')
-  findWithoutPastoral(@Query() query: MassesWithoutPastoralQueryDto) {
+  findWithoutPastoral(@Query() query: DateRangeQueryDto) {
     return this.massesService.findWithoutPastoral(query);
   }
 
   @Public()
   @Get(':id')
-  findOne(@Param('id') id: number) {
-    return this.massesService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.massesService.findOne(id);
   }
 
   @Auditable('Mass')
-  @Roles('Admin Geral', 'Secretaria')
   @Patch(':id')
-  update(@Param('id') id: number, @Body() updateMassDto: UpdateMassDto) {
-    return this.massesService.update(+id, updateMassDto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateMassDto) {
+    return this.massesService.update(id, dto);
   }
 
   @Auditable('Mass')
-  @Roles('Admin Geral', 'Secretaria')
   @Delete(':id')
-  remove(@Param('id') id: number) {
-    return this.massesService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number, @Query() query: RemoveMassQueryDto) {
+    return this.massesService.remove(id, query.confirm ?? false);
   }
 
-  // RN017 (proposta): vincula Pastorais participantes desta Missa
-  @Roles('Admin Geral', 'Secretaria')
+  /** @deprecated Use PATCH /masses/:id com pastoralGroupIds. Sai junto com a migração Modais → Páginas (Bloco 9). */
+  @Auditable('Mass', { action: 'UPDATE' })
   @Post(':id/pastoral-groups')
-  linkPastoralGroups(@Param('id') id: number, @Body() dto: LinkPastoralGroupsDto) {
-    return this.massesService.linkPastoralGroups(+id, dto);
+  linkPastoralGroups(@Param('id', ParseIntPipe) id: number, @Body() dto: LinkPastoralGroupsDto) {
+    return this.massesService.linkPastoralGroups(id, dto);
   }
 }

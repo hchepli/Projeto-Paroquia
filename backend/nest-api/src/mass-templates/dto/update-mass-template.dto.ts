@@ -1,4 +1,9 @@
-import { PartialType } from '@nestjs/swagger';
+// src/mass-templates/dto/update-mass-template.dto.ts
+import { OmitType, PartialType } from '@nestjs/swagger';
 import { CreateMassTemplateDto } from './create-mass-template.dto';
 
-export class UpdateMassTemplateDto extends PartialType(CreateMassTemplateDto) {}
+// dayOfWeek/time não mudam: alterar geraria duplicatas. Para mudar, crie outro template e desative este.
+export class UpdateMassTemplateDto extends OmitType(PartialType(CreateMassTemplateDto), [
+  'dayOfWeek',
+  'time',
+] as const) {}

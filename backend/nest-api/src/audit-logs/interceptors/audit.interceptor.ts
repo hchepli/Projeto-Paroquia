@@ -9,9 +9,15 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { AUDITABLE_KEY } from '../decorators/auditable.decorator';
+import {
+  AUDITABLE_KEY,
+  AUDITABLE_OPTIONS_KEY,
+  AuditableOptions,
+} from '../decorators/auditable.decorator';
 import { AuditLogsService } from '../audit-logs.service';
 import { PrismaService } from '../../prisma/prisma.service';
+
+type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
 
 // Nunca podem ir para dados_anteriores / dados_novos (RNF005 + RNF011)
 const SENSITIVE_KEYS = new Set(['passwordHash', 'password', 'newPassword']);
@@ -28,6 +34,15 @@ function sanitize(value: any): any {
   return value;
 }
 
+// Ação padrão pelo método HTTP; o decorator pode sobrescrever (ex: POST de sub-rota = UPDATE).
+function resolveAction(method: string, forced?: AuditAction): AuditAction | undefined {
+  if (forced) return forced;
+  if (method === 'POST') return 'CREATE';
+  if (method === 'PATCH' || method === 'PUT') return 'UPDATE';
+  if (method === 'DELETE') return 'DELETE';
+  return undefined;
+}
+
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   private readonly logger = new Logger(AuditInterceptor.name);
@@ -42,6 +57,9 @@ export class AuditInterceptor implements NestInterceptor {
     const entityName = this.reflector.get<string>(AUDITABLE_KEY, context.getHandler());
     if (!entityName) return next.handle();
 
+    const options =
+      this.reflector.get<AuditableOptions>(AUDITABLE_OPTIONS_KEY, context.getHandler()) ?? {};
+
     const request = context.switchToHttp().getRequest();
     const userId = request.user?.userId;
     // Proteção extra: sem usuário autenticado, não loga
@@ -49,11 +67,15 @@ export class AuditInterceptor implements NestInterceptor {
 
     const method: string = request.method;
     const params = request.params;
+    const action = resolveAction(method, options.action);
+    if (!action) return next.handle();
+
     const modelKey = entityName.charAt(0).toLowerCase() + entityName.slice(1);
 
     let previousData: any = null;
 
-    if ((method === 'PATCH' || method === 'PUT' || method === 'DELETE') && params?.id) {
+    // Em UPDATE/DELETE busca o registro ANTES de a request seguir (dados_anteriores reais)
+    if ((action === 'UPDATE' || action === 'DELETE') && params?.id) {
       try {
         // ids numéricos chegam como string na URL; models com id Int exigem number
         const id = /^\d+$/.test(params.id) ? Number(params.id) : params.id;
@@ -67,14 +89,14 @@ export class AuditInterceptor implements NestInterceptor {
       tap({
         next: (response) => {
           // fire-and-forget: falha no log NUNCA derruba nem atrasa a request principal
-          void this.record(method, userId, entityName, params, previousData, response);
+          void this.record(action, userId, entityName, params, previousData, response);
         },
       }),
     );
   }
 
   private async record(
-    method: string,
+    action: AuditAction,
     userId: string,
     entity: string,
     params: any,
@@ -82,12 +104,7 @@ export class AuditInterceptor implements NestInterceptor {
     response: any,
   ) {
     try {
-      let action: 'CREATE' | 'UPDATE' | 'DELETE';
-      if (method === 'POST') action = 'CREATE';
-      else if (method === 'PATCH' || method === 'PUT') action = 'UPDATE';
-      else if (method === 'DELETE') action = 'DELETE';
-      else return;
-
+      // Sub-rotas (ex: POST :id/pastoral-groups) devolvem array/sem id: cai no id da URL
       const entityId = response?.id ?? params?.id;
       if (!entityId) return;
 
@@ -101,7 +118,7 @@ export class AuditInterceptor implements NestInterceptor {
       } as any);
     } catch (error) {
       this.logger.error(
-        `Falha ao gravar audit log (${entity} ${method})`,
+        `Falha ao gravar audit log (${entity} ${action})`,
         error instanceof Error ? error.stack : String(error),
       );
     }

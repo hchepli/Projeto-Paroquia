@@ -3,6 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MassTemplatesService } from '../mass-templates/mass-templates.service';
 import { CalendarQueryDto } from './dto/calendar-query.dto';
 import { CalendarItemDto } from './dto/calendar-item.dto';
+import { assertValidRange } from '../common/utils/date-range.util';
+
+const MAX_RANGE_DAYS = 366;
 
 @Injectable()
 export class CalendarService {
@@ -11,13 +14,12 @@ export class CalendarService {
     private readonly massTemplatesService: MassTemplatesService,
   ) {}
 
-  async findAll(query: CalendarQueryDto): Promise<CalendarItemDto[]> {
-    const start = new Date(query.start);
-    const end = new Date(query.end);
+async findAll(query: CalendarQueryDto): Promise<CalendarItemDto[]> {
+  const start = new Date(query.start);
+  const end = new Date(query.end);
+  assertValidRange(start, end, MAX_RANGE_DAYS); // 400 se invertido ou > 366 dias
 
-    // Garante que as recorrências (Bloco 5) já estão materializadas como
-    // Mass real antes de consultar o período — sem cron, sob demanda.
-    await this.massTemplatesService.ensureGenerated(end);
+  await this.massTemplatesService.ensureGenerated(end); 
 
     const [masses, events] = await Promise.all([
       this.prismaService.mass.findMany({

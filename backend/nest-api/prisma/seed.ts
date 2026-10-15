@@ -8,6 +8,34 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 const SALT_ROUNDS = 10;
+const TZ = 'America/Sao_Paulo';
+
+// ------------------------------------------------------------
+// Datas relativas ao mês atual (fuso America/Sao_Paulo, -03:00 fixo no Brasil)
+// ------------------------------------------------------------
+function currentMonthParts(): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const year = Number(parts.find((p) => p.type === 'year')!.value);
+  const month = Number(parts.find((p) => p.type === 'month')!.value);
+  return { year, month };
+}
+
+// Monta um instante a partir de "dia do mês + hora" em horário de Brasília.
+// monthOffset: 0 = mês atual, 1 = próximo, -1 = anterior.
+function brt(monthOffset: number, day: number, hour: number, minute = 0): Date {
+  const { year, month } = currentMonthParts();
+  const base = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
+  const y = base.getUTCFullYear();
+  const m = String(base.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(day).padStart(2, '0');
+  const hh = String(hour).padStart(2, '0');
+  const mm = String(minute).padStart(2, '0');
+  return new Date(`${y}-${m}-${d}T${hh}:${mm}:00-03:00`);
+}
 
 async function cleanDatabase() {
   // Ordem respeita as FKs (filhos antes dos pais). Roles são mantidos (upsert).
@@ -21,6 +49,7 @@ async function cleanDatabase() {
   await prisma.eventPastoralGroup.deleteMany();
   await prisma.event.deleteMany();
   await prisma.mass.deleteMany();
+  await prisma.massTemplateSkip.deleteMany();
   await prisma.massTemplate.deleteMany();
   await prisma.volunteer.deleteMany();
   await prisma.announcement.deleteMany();
@@ -190,18 +219,18 @@ async function main() {
 
   // ------------------------------------------------------------
   // 6. MASSES + vínculo com Pastorais (RN017)
-  // Cobre os 3 estados do card de escalas:
+  // Datas relativas ao MÊS ATUAL (America/Sao_Paulo). Cobre os estados do card de escalas:
   //   missa1 -> COMPLETE      (Liturgia + Coroinhas, ambas escaladas)
   //   missa3 -> INCOMPLETE    (Liturgia escalada; Coroinhas e Catequese pendentes)
   //   missa4 -> INCOMPLETE    (Liturgia + Coroinhas, nenhuma escalada)
   //   missa5 -> NO_PASTORAL   (sem pastoral: não conta como pendente de escala)
-  //   missa2 -> fora do mês, Liturgia vinculada, sem escala
-  // Datas com fuso -03:00 (Brasil) pra não "virar o dia" no filtro do mês.
+  //   missa2 -> mês seguinte, Liturgia vinculada, sem escala
+  // Horário 10h: não colide com o template de recorrência (08h).
   // ------------------------------------------------------------
   const missa1 = await prisma.mass.create({
     data: {
       title: 'Missa Dominical',
-      dateTime: new Date('2026-09-06T10:00:00-03:00'),
+      dateTime: brt(0, 6, 10),
       type: 'COMMON',
       location: 'Igreja Matriz',
     },
@@ -210,7 +239,7 @@ async function main() {
   const missa3 = await prisma.mass.create({
     data: {
       title: 'Missa Dominical',
-      dateTime: new Date('2026-09-13T10:00:00-03:00'),
+      dateTime: brt(0, 13, 10),
       type: 'COMMON',
       location: 'Igreja Matriz',
     },
@@ -219,7 +248,7 @@ async function main() {
   const missa4 = await prisma.mass.create({
     data: {
       title: 'Missa Dominical',
-      dateTime: new Date('2026-09-20T10:00:00-03:00'),
+      dateTime: brt(0, 20, 10),
       type: 'COMMON',
       location: 'Igreja Matriz',
     },
@@ -228,7 +257,7 @@ async function main() {
   await prisma.mass.create({
     data: {
       title: 'Missa Dominical (sem pastoral)',
-      dateTime: new Date('2026-09-27T10:00:00-03:00'),
+      dateTime: brt(0, 27, 10),
       type: 'COMMON',
       location: 'Igreja Matriz',
     },
@@ -236,11 +265,11 @@ async function main() {
 
   const missa2 = await prisma.mass.create({
     data: {
-      title: 'Missa de Natal',
-      dateTime: new Date('2026-12-24T22:00:00-03:00'),
+      title: 'Missa Especial',
+      dateTime: brt(1, 10, 19),
       type: 'SPECIAL',
       location: 'Igreja Matriz',
-      notes: 'Missa do Galo',
+      notes: 'Missa especial do mês seguinte',
     },
   });
 
@@ -260,6 +289,22 @@ async function main() {
   console.log('Missas criadas (com pastorais vinculadas).');
 
   // ------------------------------------------------------------
+  // 6.1 MASS TEMPLATE (recorrência de exemplo - roteiro manual do Dia 4)
+  // As ocorrências são geradas sob demanda no primeiro GET /calendar.
+  // ------------------------------------------------------------
+  await prisma.massTemplate.create({
+    data: {
+      dayOfWeek: 0, // domingo
+      time: '08:00',
+      title: 'Missa Dominical das 8h',
+      location: 'Igreja Matriz',
+      type: 'COMMON',
+    },
+  });
+
+  console.log('Template de recorrência criado.');
+
+  // ------------------------------------------------------------
   // 7. EVENTS + vínculo com Pastorais (RN017)
   // ------------------------------------------------------------
   const evento1 = await prisma.event.create({
@@ -268,8 +313,8 @@ async function main() {
       slug: 'festa-junina-2026',
       description: 'Festa junina anual da paróquia',
       categoryId: categoriaEvento.id,
-      startDate: new Date('2026-06-20T18:00:00-03:00'),
-      endDate: new Date('2026-06-20T23:00:00-03:00'),
+      startDate: brt(0, 18, 18),
+      endDate: brt(0, 18, 23),
       location: 'Salão Paroquial',
       status: 'ACTIVE',
     },
@@ -277,11 +322,11 @@ async function main() {
 
   const evento2 = await prisma.event.create({
     data: {
-      name: 'Novena de Natal',
-      slug: 'novena-de-natal-2026',
-      description: 'Novena preparatória para o Natal',
-      startDate: new Date('2026-12-15T19:00:00-03:00'),
-      endDate: new Date('2026-12-23T21:00:00-03:00'),
+      name: 'Novena Preparatória',
+      slug: 'novena-preparatoria-2026',
+      description: 'Novena preparatória para a missa especial',
+      startDate: brt(1, 2, 19),
+      endDate: brt(1, 9, 21),
       location: 'Igreja Matriz',
       status: 'ACTIVE',
       massId: missa2.id, // RN002 - correlação opcional

@@ -1,146 +1,209 @@
 // src/masses/masses.service.ts
-// Alterações: (1) findOne agora inclui pastoralGroups (pra tela de detalhe
-// da Missa mostrar se tem Pastoral cadastrada ou não). (2) novo método
-// findWithoutPastoral, usado só pelo card "Missas sem Pastoral" do Painel —
-// NÃO mexe em findAll, então todas as outras listagens de missa continuam
-// exatamente como estão hoje.
-
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
 import { CreateMassDto } from './dto/create-mass.dto';
 import { UpdateMassDto } from './dto/update-mass.dto';
 import { LinkPastoralGroupsDto } from './dto/link-pastoral-groups.dto';
-import { MassesWithoutPastoralQueryDto } from './dto/masses-without-pastoral-query.dto';
-import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '../../generated/prisma/client';
 import { MassQueryDto } from './dto/mass-query.dto';
+import { DateRangeQueryDto } from '../common/dto/date-range-query.dto';
+import { buildDateRangeFilter } from '../common/utils/date-range.util';
+
+// Campos expostos (a leitura é pública): sem createdAt, sem generatedFromTemplateId,
+// e Pastoral só com id/name (sem contato/defaultRole).
+const MASS_LIST_SELECT = {
+  id: true,
+  title: true,
+  dateTime: true,
+  type: true,
+  location: true,
+  notes: true,
+} satisfies Prisma.MassSelect;
+
+const MASS_DETAIL_SELECT = {
+  ...MASS_LIST_SELECT,
+  pastoralGroups: { select: { pastoralGroup: { select: { id: true, name: true } } } },
+} satisfies Prisma.MassSelect;
 
 @Injectable()
 export class MassesService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async create(createMassDto: CreateMassDto) {
-    try {
-      return await this.prismaService.mass.create({ data: createMassDto });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('Já existe uma missa com esse nome');
+  async create(dto: CreateMassDto) {
+    const { pastoralGroupIds, ...data } = dto;
+    return this.prismaService.$transaction(async (tx) => {
+      const mass = await tx.mass.create({ data });
+      if (pastoralGroupIds?.length) {
+        await this.syncPastoralGroups(tx, mass.id, pastoralGroupIds);
       }
-      throw error;
-    }
+      return tx.mass.findUniqueOrThrow({ where: { id: mass.id }, select: MASS_DETAIL_SELECT });
+    });
   }
 
   async findAll(query: MassQueryDto) {
     const { page = 1, limit = 10, search, sortBy, order = 'asc', startDate, endDate } = query;
-    const skip = (page - 1) * limit;
+    const dateRange = buildDateRangeFilter(startDate, endDate);
 
     const where: Prisma.MassWhereInput = {
       ...(search && { title: { contains: search, mode: 'insensitive' } }),
-      ...((startDate || endDate) && {
-        dateTime: {
-          ...(startDate && { gte: new Date(startDate) }),
-          ...(endDate && { lte: new Date(endDate) }),
-        },
-      }),
+      ...(dateRange && { dateTime: dateRange }),
     };
 
     const allowedSortFields = ['dateTime', 'title'];
     const orderBy: Prisma.MassOrderByWithRelationInput = allowedSortFields.includes(sortBy ?? '')
       ? { [sortBy as string]: order }
-      : { dateTime: 'asc' };
+      : { dateTime: order };
 
     const [data, total] = await Promise.all([
-      this.prismaService.mass.findMany({ where, skip, take: limit, orderBy }),
+      this.prismaService.mass.findMany({
+        where, orderBy, skip: (page - 1) * limit, take: limit, select: MASS_LIST_SELECT,
+      }),
       this.prismaService.mass.count({ where }),
     ]);
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  // NOVO — usado só pelo card "Missas sem Pastoral" (Painel Admin, Bloco 8).
-  // Retorna as Missas de um período (tipicamente o mês corrente) que ainda
-  // não têm nenhuma Pastoral vinculada (RN017 proposta). Intencionalmente
-  // não paginado: uso esperado é card/contador, não listagem navegável.
-  async findWithoutPastoral(query: MassesWithoutPastoralQueryDto) {
-    const { startDate, endDate } = query;
-
-    const where: Prisma.MassWhereInput = {
-      pastoralGroups: { none: {} },
-      ...((startDate || endDate) && {
-        dateTime: {
-          ...(startDate && { gte: new Date(startDate) }),
-          ...(endDate && { lte: new Date(endDate) }),
-        },
-      }),
-    };
-
+  // Card "Missas sem Pastoral" (Painel). Não paginado de propósito (contador/lista curta).
+  async findWithoutPastoral(query: DateRangeQueryDto) {
+    const dateRange = buildDateRangeFilter(query.startDate, query.endDate);
     const data = await this.prismaService.mass.findMany({
-      where,
+      where: { pastoralGroups: { none: {} }, ...(dateRange && { dateTime: dateRange }) },
       orderBy: { dateTime: 'asc' },
+      select: MASS_LIST_SELECT,
+      take: 500,
     });
-
     return { data, total: data.length };
   }
 
   async findOne(id: number) {
-    const mass = await this.prismaService.mass.findUnique({
-      where: { id },
-      include: {
-        pastoralGroups: {
-          include: { pastoralGroup: true },
-        },
-      },
-    });
-    if (!mass) {
-      throw new NotFoundException('Missa não encontrada');
-    }
+    const mass = await this.prismaService.mass.findUnique({ where: { id }, select: MASS_DETAIL_SELECT });
+    if (!mass) throw new NotFoundException('Missa não encontrada');
     return mass;
   }
 
-  async update(id: number, updateMassDto: UpdateMassDto) {
-    await this.findOne(id);
-    try {
-      return await this.prismaService.mass.update({ where: { id }, data: updateMassDto });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('Já existe uma missa com esse nome');
+  async update(id: number, dto: UpdateMassDto) {
+    const { pastoralGroupIds, ...data } = dto;
+    return this.prismaService.$transaction(async (tx) => {
+      await this.lockMass(tx, id);
+      if (pastoralGroupIds !== undefined) {
+        await this.syncPastoralGroups(tx, id, pastoralGroupIds);
       }
-      throw error;
-    }
+      // generatedFromTemplateId/templateOccurrenceAt não estão no DTO: editar dateTime é livre.
+      await tx.mass.update({ where: { id }, data });
+      return tx.mass.findUniqueOrThrow({ where: { id }, select: MASS_DETAIL_SELECT });
+    });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
-    return await this.prismaService.mass.delete({ where: { id } });
-  }
+  /**
+   * RN016: se houver Escalas, exige confirm=true; a cascata (Missa -> Escalas ->
+   * Atribuições) é do banco (onDelete: Cascade) dentro da MESMA transação.
+   * O FOR UPDATE serializa com INSERT de Escala (FK pega KEY SHARE na Missa).
+   * Se a Missa veio de recorrência, grava o skip para o ensureGenerated não recriá-la.
+   */
+  async remove(id: number, confirm = false) {
+    return this.prismaService.$transaction(async (tx) => {
+      await this.lockMass(tx, id);
 
-  // RN017 (proposta): vincula quais Pastorais participam desta Missa.
-  // Substitui o conjunto atual pelo enviado (delete + createMany em transação).
-  async linkPastoralGroups(id: number, dto: LinkPastoralGroupsDto) {
-    await this.findOne(id);
-
-    try {
-      return await this.prismaService.$transaction(async (tx) => {
-        await tx.massPastoralGroup.deleteMany({ where: { massId: id } });
-
-        if (dto.pastoralGroupIds.length > 0) {
-          await tx.massPastoralGroup.createMany({
-            data: dto.pastoralGroupIds.map((pastoralGroupId) => ({
-              massId: id,
-              pastoralGroupId,
-            })),
-          });
-        }
-
-        return tx.massPastoralGroup.findMany({
-          where: { massId: id },
-          include: { pastoralGroup: true },
-        });
+      const mass = await tx.mass.findUnique({
+        where: { id },
+        include: {
+          schedules: {
+            select: {
+              id: true,
+              pastoralGroup: { select: { id: true, name: true } },
+              _count: { select: { assignments: true } },
+            },
+          },
+          events: { select: { id: true, name: true } },
+        },
       });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-        throw new NotFoundException('Uma ou mais Pastorais informadas não existem.');
+      if (!mass) throw new NotFoundException('Missa não encontrada');
+
+      if (mass.schedules.length > 0 && !confirm) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'Conflict',
+          code: 'MASS_HAS_SCHEDULES',
+          message: `Esta missa possui ${mass.schedules.length} escala(s). Excluí-la apagará também as escalas e suas atribuições. Confirme para prosseguir.`,
+          schedules: mass.schedules.map((s) => ({
+            id: s.id,
+            pastoralGroup: s.pastoralGroup,
+            assignmentsCount: s._count.assignments,
+          })),
+          linkedEvents: mass.events, // ficarão sem missa correlacionada (RN002), sem bloquear
+        });
       }
-      throw error;
+
+      if (mass.generatedFromTemplateId !== null && mass.templateOccurrenceAt) {
+        await tx.massTemplateSkip.createMany({
+          data: [{ templateId: mass.generatedFromTemplateId, occurrenceAt: mass.templateOccurrenceAt }],
+          skipDuplicates: true,
+        });
+      }
+
+      await tx.mass.delete({ where: { id } });
+
+      return {
+        id: mass.id,
+        title: mass.title,
+        dateTime: mass.dateTime,
+        removedSchedules: mass.schedules.length,
+        unlinkedEvents: mass.events,
+      };
+    });
+  }
+
+  // Mantido por compatibilidade (o front atual ainda chama). PATCH /masses/:id já sincroniza.
+  async linkPastoralGroups(id: number, dto: LinkPastoralGroupsDto) {
+    return this.prismaService.$transaction(async (tx) => {
+      await this.lockMass(tx, id);
+      await this.syncPastoralGroups(tx, id, dto.pastoralGroupIds);
+      return tx.massPastoralGroup.findMany({
+        where: { massId: id },
+        select: { massId: true, pastoralGroupId: true, pastoralGroup: { select: { id: true, name: true } } },
+      });
+    });
+  }
+
+  private async lockMass(tx: Prisma.TransactionClient, id: number): Promise<void> {
+    const rows = await tx.$queryRaw<{ id: number }[]>`SELECT id FROM "missas" WHERE id = ${id} FOR UPDATE`;
+    if (rows.length === 0) throw new NotFoundException('Missa não encontrada');
+  }
+
+  /** Torna o conjunto de Pastorais igual a `ids`, sem tocar nas que já estão (RN017). */
+  private async syncPastoralGroups(tx: Prisma.TransactionClient, massId: number, ids: number[]) {
+    const unique = [...new Set(ids)];
+
+    const found = await tx.pastoralGroup.findMany({ where: { id: { in: unique } }, select: { id: true } });
+    if (found.length !== unique.length) {
+      throw new BadRequestException('Uma ou mais Pastorais informadas não existem.');
+    }
+
+    const current = await tx.massPastoralGroup.findMany({ where: { massId }, select: { pastoralGroupId: true } });
+    const currentIds = current.map((c) => c.pastoralGroupId);
+    const toRemove = currentIds.filter((pid) => !unique.includes(pid));
+    const toAdd = unique.filter((pid) => !currentIds.includes(pid));
+
+    if (toRemove.length > 0) {
+      const blocking = await tx.schedule.findMany({
+        where: { massId, pastoralGroupId: { in: toRemove } },
+        select: { pastoralGroup: { select: { name: true } } },
+      });
+      if (blocking.length > 0) {
+        const names = blocking.map((b) => b.pastoralGroup?.name ?? '?').join(', ');
+        throw new ConflictException(
+          `Não é possível desvincular: ${names} já possui(em) escala nesta missa. Remova a escala antes.`,
+        );
+      }
+      await tx.massPastoralGroup.deleteMany({ where: { massId, pastoralGroupId: { in: toRemove } } });
+    }
+
+    if (toAdd.length > 0) {
+      await tx.massPastoralGroup.createMany({
+        data: toAdd.map((pastoralGroupId) => ({ massId, pastoralGroupId })),
+        skipDuplicates: true,
+      });
     }
   }
 }
