@@ -1,11 +1,33 @@
-// src/events/dto/find-events-query.dto.ts
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBooleanString, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsEnum, IsIn, IsInt, IsOptional, Min } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { EventStatus } from '../../../generated/prisma/client';
 
+/** Listagem PÚBLICA: sempre só eventos ACTIVE. (includeAll foi removido: ver GET /events/admin.) */
 export class FindEventsQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ description: 'Se true, inclui eventos cancelados (uso admin)' })
-  @IsBooleanString()
+  @ApiPropertyOptional({
+    enum: ['upcoming', 'past'],
+    description:
+      'upcoming = ainda não terminaram (ordem crescente); past = já terminaram (ordem decrescente). ' +
+      'Com period, o parâmetro "order" é ignorado.',
+  })
   @IsOptional()
-  includeAll?: string;
+  @IsIn(['upcoming', 'past'])
+  period?: 'upcoming' | 'past';
+
+  @ApiPropertyOptional({ description: 'Filtra por categoria' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
+}
+
+/** Listagem ADMIN: pode filtrar por status (inclui CANCELLED). */
+export class FindAdminEventsQueryDto extends FindEventsQueryDto {
+  @ApiPropertyOptional({ enum: EventStatus })
+  @IsOptional()
+  @IsEnum(EventStatus)
+  status?: EventStatus;
 }

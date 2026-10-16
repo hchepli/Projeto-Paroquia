@@ -406,6 +406,7 @@ model AttendanceConfirmation {
   contact   String   @map("contato") @db.VarChar(150)
   ipAddress String?  @map("ip_address") @db.VarChar(45) // apoio ao rate limiting (RNF017)
   createdAt DateTime @default(now()) @map("created_at")
+  @@unique([eventId, contact], map: "uq_confirmacao_evento_contato")
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
