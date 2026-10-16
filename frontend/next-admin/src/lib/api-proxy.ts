@@ -35,3 +35,14 @@ export async function proxyToApi(path: string, init: ProxyInit = {}) {
   }
   return NextResponse.json(data, { status: res.status });
 }
+
+export async function forwardError(res: Response, fallback: string) {
+  const body = await res.json().catch(() => null);
+  if (body && typeof body === 'object') {
+    return NextResponse.json(
+      { ...body, message: (body as { message?: unknown }).message ?? fallback },
+      { status: res.status },
+    );
+  }
+  return NextResponse.json({ message: fallback }, { status: res.status });
+}

@@ -1,36 +1,29 @@
 // src/hooks/events/useUpdateEvent.ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Event } from '@/types/events/events';
+import { AdminEvent } from '@/types/events/events';
+import { EventPayload } from '@/lib/events/form';
+import { throwApiError } from '@/lib/errors';
 
-interface UpdateEventInput {
-  id: number;
-  name?: string;
-  description?: string;
-  startDate?: string;
-  endDate?: string;
-  location?: string;
-  massId?: number | null;
-  status?: 'ACTIVE' | 'CANCELLED';
-}
+type UpdateEventInput = EventPayload & { id: number };
 
-async function updateEvent({ id, ...rest }: UpdateEventInput): Promise<Event> {
+async function updateEvent({ id, ...rest }: UpdateEventInput): Promise<AdminEvent> {
   const res = await fetch(`/api/events/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(rest),
   });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.message ?? 'Erro ao atualizar evento.');
-  return data;
+  if (!res.ok) await throwApiError(res, 'Erro ao atualizar evento.');
+  return res.json();
 }
 
 export function useUpdateEvent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: updateEvent,
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
+      // ['events'] cobre lista e detalhe; cancelar/reativar muda o calendário.
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      queryClient.invalidateQueries({ queryKey: ['events', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
     },
   });
 }

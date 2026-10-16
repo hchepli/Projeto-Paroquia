@@ -19,10 +19,12 @@ export function usePermissions() {
 
   const isAdmin = role.includes('admin');
   const isSecretary = role.includes('secretaria') || role.includes('secretary');
-
+  const canManage = isAdmin || isSecretary;
   return {
     isLoading,
     user: user ?? null,
-    canManageMasses: isAdmin || isSecretary,
+    canManageMasses: canManage,
+    // Eventos e Confirmações de Presença: Admin Geral e Secretaria (Coordenador = leitura).
+    canManageEvents: canManage,
   };
 }

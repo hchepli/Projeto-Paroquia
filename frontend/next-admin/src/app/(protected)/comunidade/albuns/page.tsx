@@ -12,6 +12,7 @@ import { useAlbums } from '@/hooks/albums/useAlbums';
 import { usePhotos } from '@/hooks/photos/usePhotos';
 import { useDeleteAlbum } from '@/hooks/albums/useDeleteAlbum';
 import { Album } from '@/types/albums/album';
+import { eventOptionLabel } from '@/lib/events/form';
 
 const PAGE_SIZE = 10;
 

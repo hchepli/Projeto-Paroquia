@@ -16,6 +16,7 @@ import { useEvents } from '@/hooks/events/useEvents';
 import { useAlbums } from '@/hooks/albums/useAlbums';
 import { usePhotos } from '@/hooks/photos/usePhotos';
 import { Event } from '@/types/events/events';
+import { usePermissions } from '@/hooks/auth/usePermissions';
 
 type TypeFilter = 'ALL' | CommunityContentType;
 
@@ -73,17 +74,26 @@ export default function ComunidadePage() {
   const { data: announcementsResult, isLoading: announcementsLoading } = useAnnouncements({
     limit: 100,
   });
+  const { canManageEvents } = usePermissions();
 
+  // Tabela de conteúdo: todos os status, mais recentes primeiro.
   const { data: eventsResult, isLoading: eventsLoading } = useEvents({
     limit: 100,
-    includeAll: true,
+    sortBy: 'startDate',
+    order: 'desc',
+  });
+  // Cards e preview: só próximos e ativos, ordenados pelo servidor.
+  const { data: upcomingResult, isLoading: upcomingLoading } = useEvents({
+    period: 'upcoming',
+    status: 'ACTIVE',
+    limit: 50,
   });
   const { data: albums = [], isLoading: albumsLoading } = useAlbums();
   const { data: photos } = usePhotos();
 
   const upcomingEvents = useMemo(
-    () => (eventsResult?.data ?? []).filter((e) => isWithinNextDays(e.startDate, 30)),
-    [eventsResult],
+    () => (upcomingResult?.data ?? []).filter((e) => isWithinNextDays(e.startDate, 30)),
+    [upcomingResult],
   );
 
   const publishedCount = publishedData?.total ?? 0;
@@ -91,12 +101,11 @@ export default function ComunidadePage() {
 
   const eventsPreviewItems = useMemo(
     () =>
-      (eventsResult?.data ?? [])
+      (upcomingResult?.data ?? [])
         .filter((e) => isWithinNextDays(e.startDate, 90))
-        .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
         .slice(0, 4)
         .map(toEventPreviewItem),
-    [eventsResult],
+    [upcomingResult],
   );
 
   // Merge das 3 entidades numa única lista, ordenada por data desc.
@@ -168,7 +177,7 @@ export default function ComunidadePage() {
         description="Gerencie o conteúdo do site da paróquia"
         actions={[
           { label: 'Novo Comunicado', onClick: () => router.push('/comunidade/comunicados/registrar') },
-          { label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
+          ...(canManageEvents ? [{ label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') }] : []),
           { label: 'Novo Álbum', onClick: () => router.push('/comunidade/albuns/registrar') },
         ]}
       />
@@ -208,7 +217,7 @@ export default function ComunidadePage() {
           <EventsPreviewCard
             title="Próximos Eventos"
             items={eventsPreviewItems}
-            isLoading={eventsLoading}
+            isLoading={upcomingLoading}
           />
         </div>
       </div>

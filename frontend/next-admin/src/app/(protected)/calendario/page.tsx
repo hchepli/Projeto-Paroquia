@@ -2,16 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import MonthGrid from '@/components/ui/calendar/MonthGrid';
 import MassFormModal from '@/components/ui/forms/MassFormModal';
-import EventFormModal, { EventDto } from '@/components/ui/forms/EventFormModal';
+import EventFormModal from '@/components/ui/forms/EventFormModal';
 import AgendaTimeline, { AgendaItem } from '@/components/ui/calendar/AgendaTimeline';
 import { getMonthLabel, getDaysInMonth, getFirstWeekdayOffset } from '@/lib/date/calendar';
 import { isSameLocalDay } from '@/lib/date/datetime';
-import { getErrorMessage, throwApiError } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/errors';
 import { useCalendar } from '@/hooks/calendar/useCalendar';
 import { usePermissions } from '@/hooks/auth/usePermissions';
 import { CalendarItem } from '@/types/calendar/calendar-item';
@@ -38,18 +37,9 @@ function toAgendaItem(item: CalendarItem): AgendaItem<CalendarItem> {
   };
 }
 
-// CalendarItem não carrega os campos do modal de Evento (location, etc.),
-// então o registro completo é buscado ao clicar. Missa busca sozinha dentro
-// do MassFormModal (useMass).
-async function fetchEventById(id: number): Promise<EventDto> {
-  const res = await fetch(`/api/events/${id}`);
-  if (!res.ok) await throwApiError(res, 'Erro ao buscar evento.');
-  return res.json();
-}
-
 export default function CalendarioPage() {
   const router = useRouter();
-  const { canManageMasses } = usePermissions();
+  const { canManageMasses, canManageEvents } = usePermissions();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
@@ -58,16 +48,6 @@ export default function CalendarioPage() {
 
   const { start, end } = useMemo(() => getMonthRange(currentDate), [currentDate]);
   const { data: items, isLoading, isError, error, refetch } = useCalendar(start, end);
-
-  const {
-    data: editingEvent,
-    isError: eventError,
-    error: eventErrorObj,
-  } = useQuery({
-    queryKey: ['events', eventId],
-    queryFn: () => fetchEventById(eventId!),
-    enabled: eventId !== null,
-  });
 
   function handleAgendaItemClick(item: AgendaItem<CalendarItem>) {
     if (!item.id || !item.entityType) return;
@@ -100,7 +80,9 @@ export default function CalendarioPage() {
     ...(canManageMasses
       ? [{ label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') }]
       : []),
-    { label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
+    ...(canManageEvents
+      ? [{ label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') }]
+      : []),
   ];
 
   return (
@@ -156,19 +138,14 @@ export default function CalendarioPage() {
           <p className="mb-4 text-[14px] font-semibold text-gray-700">
             {selectedDay} de {getMonthLabel(currentDate)}
           </p>
-          {eventError && (
-            <p className="mb-2 text-sm text-red-600">
-              {getErrorMessage(eventErrorObj, 'Erro ao buscar evento.')}
-            </p>
-          )}
           <AgendaTimeline items={selectedDayItems} onItemClick={handleAgendaItemClick} />
         </div>
       </div>
 
       <MassFormModal open={massId !== null} massId={massId} onClose={() => setMassId(null)} />
       <EventFormModal
-        open={eventId !== null && Boolean(editingEvent)}
-        event={editingEvent ?? null}
+        open={eventId !== null}
+        eventId={eventId}
         onClose={() => setEventId(null)}
       />
     </>

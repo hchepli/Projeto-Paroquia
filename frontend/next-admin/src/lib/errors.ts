@@ -6,6 +6,8 @@ export class ApiError extends Error {
   status: number;
   body: unknown;
 
+  
+
   constructor(message: string, status: number, body: unknown = null) {
     super(message);
     this.name = 'ApiError';
@@ -13,6 +15,14 @@ export class ApiError extends Error {
     this.body = body;
   }
 }
+
+const STATUS_MESSAGES: Record<number, string> = {
+  401: 'Sua sessão expirou. Entre novamente.',
+  403: 'Você não tem permissão para realizar esta ação.',
+  404: 'Registro não encontrado. Ele pode ter sido removido.',
+  422: 'Este evento já foi encerrado.',
+  429: 'Muitas tentativas em pouco tempo. Aguarde um minuto e tente novamente.',
+};
 
 export function extractMessage(body: unknown, fallback: string): string {
   if (body && typeof body === 'object' && 'message' in body) {
@@ -34,4 +44,13 @@ export async function throwApiError(res: Response, fallback: string): Promise<ne
 
 export function getErrorMessage(err: unknown, fallback = 'Erro inesperado.'): string {
   return err instanceof Error && err.message ? err.message : fallback;
+}
+
+export function getFriendlyErrorMessage(err: unknown, fallback = 'Erro inesperado.'): string {
+  if (err instanceof ApiError) {
+    if (err.status === 400 || err.status === 409) return err.message || fallback;
+    if (err.status >= 500) return 'Erro no servidor. Tente novamente em instantes.';
+    return STATUS_MESSAGES[err.status] ?? (err.message || fallback);
+  }
+  return getErrorMessage(err, fallback);
 }

@@ -3,7 +3,6 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, CheckCircle2, Ticket, AlertTriangle, EyeOff, Images } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
@@ -11,11 +10,10 @@ import Table from '@/components/ui/tables/Table';
 import EventsTable from '@/components/ui/tables/EventsTable';
 import CalendarSidebar from '@/components/ui/calendar/CalendarSidebar';
 import MassFormModal from '@/components/ui/forms/MassFormModal';
-import EventFormModal, { EventDto } from '@/components/ui/forms/EventFormModal';
+import EventFormModal from '@/components/ui/forms/EventFormModal';
 import { AgendaItem } from '@/components/ui/calendar/AgendaTimeline';
 import { getMonthLabel, getDaysInMonth, getFirstWeekdayOffset } from '@/lib/date/calendar';
 import { isSameLocalDay } from '@/lib/date/datetime';
-import { throwApiError } from '@/lib/errors';
 import { useMasses } from '@/hooks/masses/useMasses';
 import { useEvents } from '@/hooks/events/useEvents';
 import { useAuditLogs } from '@/hooks/audit-logs/useAuditLogs';
@@ -78,15 +76,9 @@ function formatShortDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 
-async function fetchEventById(id: number): Promise<EventDto> {
-  const res = await fetch(`/api/events/${id}`);
-  if (!res.ok) await throwApiError(res, 'Erro ao buscar evento.');
-  return res.json();
-}
-
 export default function PainelPage() {
   const router = useRouter();
-  const { canManageMasses } = usePermissions();
+  const { canManageMasses, canManageEvents } = usePermissions();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
@@ -100,7 +92,11 @@ export default function PainelPage() {
     endDate: endISO,
     limit: 50,
   });
-  const { data: eventsResult, isLoading: eventsLoading } = useEvents();
+  const { data: eventsResult, isLoading: eventsLoading } = useEvents({
+    period: 'upcoming',
+    status: 'ACTIVE',
+    limit: 50,
+  });
   const { data: auditLogsResult, isLoading: auditLoading } = useAuditLogs();
 
   const { start, end } = useMemo(() => getMonthRange(currentDate), [currentDate]);
@@ -124,11 +120,6 @@ export default function PainelPage() {
   // Fotos na galeria nos últimos 30 dias.
   const { data: photos = [] } = usePhotos();
 
-  const { data: editingEvent } = useQuery({
-    queryKey: ['events', eventId],
-    queryFn: () => fetchEventById(eventId!),
-    enabled: eventId !== null,
-  });
 
   function handleAgendaItemClick(item: AgendaItem<CalendarItem>) {
     if (!item.id || !item.entityType) return;
@@ -190,7 +181,7 @@ export default function PainelPage() {
     ...(canManageMasses
       ? [{ label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') }]
       : []),
-    { label: 'Criar Evento', onClick: () => router.push('/comunidade/eventos/registrar') },
+    ...(canManageEvents ? [{ label: 'Criar Evento', onClick: () => router.push('/comunidade/eventos/registrar') }] : []),
   ];
 
   return (
@@ -212,8 +203,8 @@ export default function PainelPage() {
                 massesLoading
                   ? 'Carregando...'
                   : massesToday.length > 0
-                  ? massesToday.map((m) => formatTime(m.dateTime)).join(' · ')
-                  : 'Nenhuma missa hoje'
+                    ? massesToday.map((m) => formatTime(m.dateTime)).join(' · ')
+                    : 'Nenhuma missa hoje'
               }
               onClick={() => router.push('/calendario')}
             />
@@ -290,8 +281,8 @@ export default function PainelPage() {
 
       <MassFormModal open={massId !== null} massId={massId} onClose={() => setMassId(null)} />
       <EventFormModal
-        open={eventId !== null && Boolean(editingEvent)}
-        event={editingEvent ?? null}
+        open={eventId !== null}
+        eventId={eventId}
         onClose={() => setEventId(null)}
       />
     </>

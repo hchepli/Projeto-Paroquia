@@ -1,75 +1,39 @@
-// src/app/api/events/[id]/route.ts
+// src/app/api/events/[id]/route.ts  (PATCH e DELETE; GET agora é /admin/[id])
 import { NextRequest, NextResponse } from 'next/server';
 import { apiFetch } from '@/lib/api';
-
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
-  const { id } = await params;
-  const backendRes = await apiFetch(`/events/${id}`, { token });
-
-  if (!backendRes.ok) {
-    const errorBody = await backendRes.json().catch(() => null);
-    return NextResponse.json(
-      { message: errorBody?.message ?? 'Erro ao buscar evento.' },
-      { status: backendRes.status },
-    );
-  }
-
-  const data = await backendRes.json();
-  return NextResponse.json(data);
-}
+import { forwardError } from '@/lib/api-proxy';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
+  if (!token) return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
 
   const { id } = await params;
   const body = await req.json().catch(() => null);
-  if (!body) {
-    return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-  }
+  if (!body) return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
 
   const backendRes = await apiFetch(`/events/${id}`, {
     token,
     method: 'PATCH',
     body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
   });
 
-  const data = await backendRes.json().catch(() => null);
-
-  if (!backendRes.ok) {
-    return NextResponse.json(
-      { message: data?.message ?? 'Erro ao atualizar evento.' },
-      { status: backendRes.status },
-    );
-  }
-
-  return NextResponse.json(data, { status: backendRes.status });
+  if (!backendRes.ok) return forwardError(backendRes, 'Erro ao atualizar evento.');
+  return NextResponse.json(await backendRes.json(), { status: backendRes.status });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
+  if (!token) return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
 
   const { id } = await params;
-  const backendRes = await apiFetch(`/events/${id}`, { token, method: 'DELETE' });
+  const { searchParams } = new URL(req.url);
+  const qs = searchParams.get('confirm') === 'true' ? '?confirm=true' : '';
 
-  if (!backendRes.ok) {
-    const errorBody = await backendRes.json().catch(() => null);
-    return NextResponse.json(
-      { message: errorBody?.message ?? 'Erro ao remover evento.' },
-      { status: backendRes.status },
-    );
-  }
+  const backendRes = await apiFetch(`/events/${id}${qs}`, { token, method: 'DELETE' });
 
-  return new NextResponse(null, { status: 204 });
+  // Repassa o corpo inteiro do 409 EVENT_HAS_SCHEDULES (code, schedules, linkedAlbums).
+  if (!backendRes.ok) return forwardError(backendRes, 'Erro ao remover evento.');
+
+  const data = await backendRes.json().catch(() => null);
+  return NextResponse.json(data ?? { id: Number(id) });
 }

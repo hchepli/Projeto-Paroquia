@@ -6,20 +6,21 @@ import { Search, X } from 'lucide-react';
 import { useEvents } from '@/hooks/events/useEvents';
 import { useDebouncedValue } from '@/hooks/ui/useDebouncedValue';
 import { useOnClickOutside } from '@/hooks/ui/useOnClickOutside';
-import { Event } from '@/types/events/events';
+import { AdminEvent } from '@/types/events/events';
+import { eventOptionLabel } from '@/lib/events/form';
 
 interface EventSearchComboboxProps {
   value: string; // eventId como string, '' = nenhum
   onChange: (eventId: string) => void;
 }
 
-function formatEventLabel(event: Event): string {
+function formatEventLabel(event: AdminEvent): string {
   const date = new Date(event.startDate);
   const day = date.toLocaleDateString('pt-BR');
   const time = date
     .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     .replace(':', 'h');
-  return `${event.name}, ${day} às ${time}`;
+  return `${eventOptionLabel(event)}, ${day} às ${time}`;
 }
 
 export default function EventSearchCombobox({ value, onChange }: EventSearchComboboxProps) {
@@ -34,11 +35,13 @@ export default function EventSearchCombobox({ value, onChange }: EventSearchComb
   const { data, isLoading } = useEvents({
     search: debouncedQuery || undefined,
     limit: 10,
+    sortBy: 'startDate',
+    order: 'desc',
   });
 
   const results = data?.data ?? [];
 
-  function handleSelect(event: Event) {
+  function handleSelect(event: AdminEvent) {
     onChange(String(event.id));
     setSelectedLabel(formatEventLabel(event));
     setQuery('');
