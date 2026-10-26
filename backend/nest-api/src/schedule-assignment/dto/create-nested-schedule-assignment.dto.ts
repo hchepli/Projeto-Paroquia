@@ -1,19 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsString } from 'class-validator';
+import { IsInt, IsNotEmpty, IsString, MaxLength, Min } from 'class-validator';
+import { NormalizeRole } from '../../schedules/utils/schedule-rules.util';
 
-// DTO de atribuição para uso ANINHADO dentro de CreateScheduleDto.
-// Sem scheduleId: o vínculo é resolvido pelo service a partir da
-// Schedule recém-criada, não informado pelo cliente.
+// Uso ANINHADO em CreateScheduleDto: sem scheduleId (resolvido pelo service).
 export class CreateNestedScheduleAssignmentDto {
   @ApiProperty({ example: 1, description: 'ID do voluntário' })
   @IsInt()
+  @Min(1)
   volunteerId!: number;
 
-  @ApiProperty({
-    example: 'leitor',
-    description:
-      'Função na escala (texto livre no schema — ex: leitor, ministro_eucaristia, coroinha)',
-  })
+  @ApiProperty({ example: 'leitor', description: 'Função (texto livre; normalizada para minúsculas/sem espaços extras).' })
+  @NormalizeRole()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
   role!: string;
 }

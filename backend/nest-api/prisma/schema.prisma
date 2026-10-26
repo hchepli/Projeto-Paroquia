@@ -11,6 +11,7 @@
 //   - RN007: Schedule deve vincular-se a Mass OU Event, nunca ambos / nenhum.
 //   - RN010 (capa única): no máximo 1 Photo com isCover=true por Album.
 
+
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -294,16 +295,20 @@ model Schedule {
   id              String   @id @default(uuid()) @db.Char(36)
   massId          Int?     @map("missa_id")
   eventId         Int?     @map("evento_id")
-  pastoralGroupId Int?     @map("pastoral_id") // escopo/filtro de relatório (RN006/RN008)
+  pastoralGroupId Int      @map("pastoral_id") // NOT NULL (RN006/RN008/RN017)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  mass          Mass?          @relation(fields: [massId], references: [id], onDelete: Cascade)
-  event         Event?         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  pastoralGroup PastoralGroup? @relation(fields: [pastoralGroupId], references: [id])
+  mass          Mass?         @relation(fields: [massId], references: [id], onDelete: Cascade)
+  event         Event?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pastoralGroup PastoralGroup @relation(fields: [pastoralGroupId], references: [id], onDelete: Restrict)
 
   assignments ScheduleAssignment[]
 
+  // Uma escala por (Missa|Evento + Pastoral). NULLs são distintos no Postgres,
+  // então Missa e Evento não conflitam entre si.
+  @@unique([massId, pastoralGroupId], map: "uq_escala_missa_pastoral")
+  @@unique([eventId, pastoralGroupId], map: "uq_escala_evento_pastoral")
   @@map("escalas")
 }
 

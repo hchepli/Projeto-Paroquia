@@ -1,106 +1,82 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, Req, Query, Res } from '@nestjs/common';
-import { SchedulesService } from './schedules.service';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
-import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import { ScheduleQueryDto } from './dto/schedule-query.dto';
-import { Roles } from '../auth/decorators/roles.decorator';
-import type { RequestWithUser } from '../common/interfaces/request-with-user.interface';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { SchedulesService } from './schedules.service';
+import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { ScheduleQueryDto } from './dto/schedule-query.dto';
+import { CoverageQueryDto } from './dto/coverage-query.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { ROLE_NAMES } from '../common/constrants/role-names.constants';
+import { Auditable } from '../audit-logs/decorators/auditable.decorator';
 import { buildSchedulesCsv } from './utils/schedules-csv.util';
 import { buildSchedulesPdf } from './utils/schedules-pdf.util';
-import { Auditable } from '../audit-logs/decorators/auditable.decorator';
-import { PendingScheduleQueryDto } from './dto/pending-schedule-query.dto';
 
 @ApiBearerAuth()
+@Roles(ROLE_NAMES.ADMIN, ROLE_NAMES.SECRETARIA, ROLE_NAMES.COORDENADOR)
 @Controller('schedules')
 export class SchedulesController {
-  constructor(private readonly schedulesService: SchedulesService) { }
+  constructor(private readonly schedulesService: SchedulesService) {}
 
   @Auditable('Schedule')
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Post()
-  create(@Body() createScheduleDto: CreateScheduleDto, @Req() req: RequestWithUser) {
-    return this.schedulesService.create(createScheduleDto, req.user);
+  create(@Body() dto: CreateScheduleDto, @CurrentUser() user: AuthUser) {
+    return this.schedulesService.create(dto, user);
   }
 
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Get()
-  findAll(@Req() req: RequestWithUser, @Query() query: ScheduleQueryDto) {
-    return this.schedulesService.findAll(req.user, query);
+  findAll(@CurrentUser() user: AuthUser, @Query() query: ScheduleQueryDto) {
+    return this.schedulesService.findAll(user, query);
   }
 
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
+  /** LEGADO (Painel): remover quando o grep confirmar que ninguém usa. */
   @Get('summary')
-  getSummary(@Req() req: RequestWithUser, @Query() query: ScheduleQueryDto) {
-    return this.schedulesService.findAllForExport(req.user, query);
+  getSummary(@CurrentUser() user: AuthUser, @Query() query: ScheduleQueryDto) {
+    return this.schedulesService.findAllForExport(user, query);
   }
 
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Get('report/export')
-  async exportReport(
-    @Req() req: RequestWithUser,
-    @Query() query: ScheduleQueryDto,
-    @Res() res: Response,
-  ) {
+  async exportReport(@CurrentUser() user: AuthUser, @Query() query: ScheduleQueryDto, @Res() res: Response) {
     if (query.format !== 'csv' && query.format !== 'pdf') {
-      return res.status(400).json({
-        message: 'Formato inválido. Apenas "csv" ou "pdf" são aceitos.',
-      });
+      throw new BadRequestException('Formato inválido. Apenas "csv" ou "pdf" são aceitos.');
     }
-
-    const schedules = await this.schedulesService.findAllForExport(req.user, query);
+    const schedules = await this.schedulesService.findAllForExport(user, query);
 
     if (query.format === 'csv') {
-      const csv = buildSchedulesCsv(schedules);
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="relatorio-escalas.csv"');
-      return res.send(csv);
+      return res.send(buildSchedulesCsv(schedules));
     }
 
-    const doc = buildSchedulesPdf(schedules, {
-      startDate: query.startDate,
-      endDate: query.endDate,
-    });
+    const doc = buildSchedulesPdf(schedules, { startDate: query.startDate, endDate: query.endDate });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="relatorio-escalas.pdf"');
     doc.pipe(res);
     doc.end();
   }
 
-@Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
-@Get('pending')
-findPending(@Query() query: PendingScheduleQueryDto, @Req() req: RequestWithUser) {
-  return this.schedulesService.findPending(query.start, query.end, req.user, query.pastoralGroupId);
-}
+  /** LEGADO: derivado de /coverage. Remover quando o grep confirmar que ninguém usa. */
+  @Get('pending')
+  findPending(@Query() query: CoverageQueryDto, @CurrentUser() user: AuthUser) {
+    return this.schedulesService.findPending(query, user);
+  }
 
-@Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
-@Get('coverage')
-findCoverage(@Query() query: PendingScheduleQueryDto, @Req() req: RequestWithUser) {
-  return this.schedulesService.findCoverage(query.start, query.end, req.user, query.pastoralGroupId);
-}
-  
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
+  @Get('coverage')
+  findCoverage(@Query() query: CoverageQueryDto, @CurrentUser() user: AuthUser) {
+    return this.schedulesService.findCoverage(query, user);
+  }
+
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
-    return this.schedulesService.findOne(id, req.user);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.schedulesService.findOne(id, user);
   }
 
-  @Auditable('Schedule')
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
-  @Patch(':id')
-  update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateScheduleDto: UpdateScheduleDto,
-    @Req() req: RequestWithUser,
-  ) {
-    return this.schedulesService.update(id, updateScheduleDto, req.user);
-  }
+  // Sem PATCH: a escala só tem vínculos imutáveis; atribuições têm endpoints próprios (/schedule-assignment).
 
   @Auditable('Schedule')
-  @Roles('Admin Geral', 'Secretaria', 'Coordenador de Pastoral')
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
-    return this.schedulesService.remove(id, req.user);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.schedulesService.remove(id, user);
   }
 }

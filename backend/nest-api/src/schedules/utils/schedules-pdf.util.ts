@@ -1,146 +1,87 @@
 import PDFDocument from 'pdfkit';
+import { flattenRows, formatDateBR, formatDateTimeBR, ScheduleExportRow } from './schedule-export.util';
 
-type ScheduleExportRow = {
-    mass: { title: string; dateTime: Date } | null;
-    event: { name: string; startDate: Date } | null;
-    pastoralGroup: { name: string } | null;
-    assignments: {
-        role: string;
-        volunteer: { name: string };
-    }[];
-};
+type ExportFilters = { startDate?: string; endDate?: string };
 
-type ExportFilters = {
-    startDate?: string;
-    endDate?: string;
-};
+const COLUMNS = [
+  { key: 'data', label: 'Data', width: 62 },
+  { key: 'hora', label: 'Hora', width: 36 },
+  { key: 'tipo', label: 'Tipo', width: 42 },
+  { key: 'titulo', label: 'Título', width: 128 },
+  { key: 'pastoral', label: 'Pastoral', width: 100 },
+  { key: 'voluntario', label: 'Voluntário', width: 100 },
+  { key: 'funcao', label: 'Função', width: 47 },
+] as const;
+const TABLE_WIDTH = 515;
+const PAD = 6;
 
-function formatDate(date: Date): string {
-    return date.toISOString().split('T')[0];
+function fmt(s?: string) {
+  if (!s) return undefined;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : formatDateBR(d);
 }
 
-// Achata as Escalas em linhas (1 por atribuição), igual ao CSV,
-// pra manter os dois formatos consistentes entre si.
-function flattenRows(schedules: ScheduleExportRow[]) {
-    const rows: {
-        data: string;
-        tipo: string;
-        titulo: string;
-        pastoral: string;
-        voluntario: string;
-        funcao: string;
-    }[] = [];
+export function buildSchedulesPdf(schedules: ScheduleExportRow[], filters: ExportFilters): PDFKit.PDFDocument {
+  const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
+  const rows = flattenRows(schedules);
+  const left = doc.page.margins.left;
 
-    for (const schedule of schedules) {
-        const tipo = schedule.mass ? 'Missa' : 'Evento';
-        const titulo = schedule.mass?.title ?? schedule.event?.name ?? '';
-        const data = schedule.mass
-            ? formatDate(schedule.mass.dateTime)
-            : schedule.event
-                ? formatDate(schedule.event.startDate)
-                : '';
-        const pastoral = schedule.pastoralGroup?.name ?? '';
+  doc.font('Helvetica-Bold').fontSize(16).text('Paróquia — Relatório de Escalas', { align: 'center' });
+  doc.moveDown(0.3);
+  const periodo =
+    filters.startDate || filters.endDate
+      ? `Período: ${fmt(filters.startDate) ?? '(início)'} a ${fmt(filters.endDate) ?? '(fim)'}`
+      : 'Período: todas as escalas (sem filtro de data)';
+  doc.font('Helvetica').fontSize(10).fillColor('#555').text(periodo, { align: 'center' });
+  doc.moveDown(1).fillColor('#000');
 
-        if (schedule.assignments.length === 0) {
-            rows.push({ data, tipo, titulo, pastoral, voluntario: '', funcao: '' });
-        } else {
-            for (const assignment of schedule.assignments) {
-                rows.push({
-                    data,
-                    tipo,
-                    titulo,
-                    pastoral,
-                    voluntario: assignment.volunteer.name,
-                    funcao: assignment.role,
-                });
-            }
-        }
+  let y = doc.y;
+  const limit = () => doc.page.height - doc.page.margins.bottom - 24;
+
+  const drawHeader = () => {
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#000');
+    let x = left;
+    for (const c of COLUMNS) {
+      doc.text(c.label, x, y, { width: c.width - 4, lineBreak: false });
+      x += c.width;
     }
+    y += 14;
+    doc.moveTo(left, y - 2).lineTo(left + TABLE_WIDTH, y - 2).strokeColor('#ccc').stroke();
+    doc.font('Helvetica').fontSize(9);
+  };
+  drawHeader();
 
-    return rows;
-}
+  if (rows.length === 0) doc.text('Nenhuma escala no período.', left, y);
 
-export function buildSchedulesPdf(
-    schedules: ScheduleExportRow[],
-    filters: ExportFilters,
-): PDFKit.PDFDocument {
-    const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
-    const rows = flattenRows(schedules);
-
-    // Cabeçalho
-    doc.fontSize(16).text('Paróquia — Relatório de Escalas', { align: 'center' });
-    doc.moveDown(0.3);
-
-    const periodoTexto =
-        filters.startDate || filters.endDate
-            ? `Período: ${filters.startDate ?? '(início)'} a ${filters.endDate ?? '(fim)'}`
-            : 'Período: todas as escalas (sem filtro de data)';
-    doc.fontSize(10).fillColor('#555').text(periodoTexto, { align: 'center' });
-    doc.moveDown(1);
-    doc.fillColor('#000');
-
-    // Tabela — larguras fixas por coluna (soma ~515, cabe em A4 com margem 40)
-    const columns = [
-        { key: 'data', label: 'Data', width: 70 },
-        { key: 'tipo', label: 'Tipo', width: 60 },
-        { key: 'titulo', label: 'Título', width: 130 },
-        { key: 'pastoral', label: 'Pastoral', width: 100 },
-        { key: 'voluntario', label: 'Voluntário', width: 100 },
-        { key: 'funcao', label: 'Função', width: 55 },
-    ] as const;
-
-    const startX = doc.page.margins.left;
-    let y = doc.y;
-    const rowHeight = 20;
-
-    function drawHeader() {
-        let x = startX;
-        doc.font('Helvetica-Bold').fontSize(9);
-        for (const col of columns) {
-            doc.text(col.label, x, y, { width: col.width });
-            x += col.width;
-        }
-        y += rowHeight;
-        doc.font('Helvetica').fontSize(9);
-        doc
-            .moveTo(startX, y - 4)
-            .lineTo(startX + columns.reduce((s, c) => s + c.width, 0), y - 4)
-            .strokeColor('#ccc')
-            .stroke();
+  for (const row of rows) {
+    const cells = COLUMNS.map((c) => row[c.key] || '-');
+    doc.font('Helvetica').fontSize(9);
+    // Altura real do conteúdo: título longo quebra linha sem invadir a próxima
+    const h = Math.max(...cells.map((t, i) => doc.heightOfString(t, { width: COLUMNS[i].width - 4 }))) + PAD;
+    if (y + h > limit()) {
+      doc.addPage();
+      y = doc.page.margins.top;
+      drawHeader();
     }
+    let x = left;
+    cells.forEach((t, i) => {
+      doc.fillColor('#000').text(t, x, y, { width: COLUMNS[i].width - 4 });
+      x += COLUMNS[i].width;
+    });
+    y += h;
+  }
 
-    drawHeader();
-
-    for (const row of rows) {
-        // Quebra de página quando chega perto do final
-        if (y > doc.page.height - doc.page.margins.bottom - rowHeight) {
-            doc.addPage();
-            y = doc.page.margins.top;
-            drawHeader();
-        }
-
-        let x = startX;
-        for (const col of columns) {
-            doc.text((row as any)[col.key] || '-', x, y, { width: col.width });
-            x += col.width;
-        }
-        y += rowHeight;
-    }
-
-    // Rodapé com data de geração — em cada página
-    const pageCount = doc.bufferedPageRange().count;
-    for (let i = 0; i < pageCount; i++) {
-        doc.switchToPage(i);
-        doc
-            .fontSize(8)
-            .fillColor('#888')
-            .text(
-                `Gerado em ${new Date().toLocaleString('pt-BR')}`,
-                startX,
-                doc.page.height - doc.page.margins.bottom + 10,
-                { align: 'left' },
-            );
-    }
-
-    return doc;
+  // Rodapé: margem inferior zerada para o PDFKit não criar página em branco ao escrever abaixo dela.
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
+    const m = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
+    doc.fontSize(8).fillColor('#888').text(
+      `Gerado em ${formatDateTimeBR(new Date())} — Página ${i + 1} de ${range.count}`,
+      left, doc.page.height - 30, { width: TABLE_WIDTH, lineBreak: false },
+    );
+    doc.page.margins.bottom = m;
+  }
+  return doc;
 }
