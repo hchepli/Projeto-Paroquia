@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarItem } from '@/types/calendar-item';
+import { CalendarItem } from '@/types/calendar/calendar-item';
 
 interface MonthGridProps {
   daysInMonth: number;

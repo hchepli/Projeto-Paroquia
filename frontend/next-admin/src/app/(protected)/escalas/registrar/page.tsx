@@ -14,20 +14,15 @@ import { useVolunteers } from '@/hooks/volunteers/useVolunteers';
 import { usePastoralGroups } from '@/hooks/pastoral-groups/usePastoralGroups';
 import { useCreateSchedule } from '@/hooks/schedules/useCreateSchedule';
 import { CreateScheduleAssignmentInput } from '@/types/schedules/create-schedule';
+import { ScheduleWarning } from '@/types/schedules/schedule';
 
 type LinkType = 'MASS' | 'EVENT';
 
 const ROLE_SUGGESTIONS = ['leitor', 'ministro_eucaristia', 'coroinha', 'apoio_organizacao'];
 
-interface AssignmentRow {
-  key: string;
-  volunteerId: string;
-  role: string;
-}
+interface AssignmentRow { key: string; volunteerId: string; role: string }
 
-function makeRow(role = ''): AssignmentRow {
-  return { key: crypto.randomUUID(), volunteerId: '', role };
-}
+const makeRow = (role = ''): AssignmentRow => ({ key: crypto.randomUUID(), volunteerId: '', role });
 
 function formatOptionLabel(title: string, iso: string) {
   const d = new Date(iso);
@@ -53,8 +48,7 @@ export default function RegistrarEscalaPage() {
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   }, []);
 
-  const { data: coverage = [] } = useCoverage(range);
-  const { data: volunteers = [] } = useVolunteers();
+  const { data: coverage = [], isLoading: coverageLoading, error: coverageError } = useCoverage(range);
   const { data: pastoralGroups = [] } = usePastoralGroups();
 
   const [linkType, setLinkType] = useState<LinkType>('MASS');
@@ -62,23 +56,22 @@ export default function RegistrarEscalaPage() {
   const [pastoralId, setPastoralId] = useState<number | null>(null);
   const [rows, setRows] = useState<AssignmentRow[]>([makeRow()]);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<ScheduleWarning[] | null>(null); // não nulo = escala criada com avisos
 
-  // Só entram no select as Missas/Eventos com alguma pastoral pendente
-  // (o back já restringe ao escopo do coordenador)
-  const options = coverage.filter(
-    (c) => c.sourceType === linkType && c.pastorals.some((p) => !p.scheduled),
-  );
+  const options = coverage.filter((c) => c.sourceType === linkType && c.pastorals.some((p) => !p.scheduled));
   const selected = coverage.find((c) => `${c.sourceType}:${c.sourceId}` === selectedKey) ?? null;
 
   const effectivePastoralId = isCoordenador ? ownPastoralId : pastoralId;
   const pastoral = pastoralGroups.find((pg) => pg.id === effectivePastoralId);
   const defaultRole = pastoral?.defaultRole ?? '';
 
+  // O back já filtra por pastoral (e o Coordenador só enxerga a própria); o filter é só cinto de segurança
+  const { data: volunteers = [], isLoading: volunteersLoading } = useVolunteers({
+    pastoralGroupId: effectivePastoralId ?? undefined,
+  });
   const pastoralVolunteers = volunteers.filter((v) => v.pastoralGroupId === effectivePastoralId);
 
-  function resetAssignments(role: string) {
-    setRows([makeRow(role)]);
-  }
+  const resetAssignments = (role: string) => setRows([makeRow(role)]);
 
   function handleLinkTypeChange(type: LinkType) {
     setLinkType(type);
@@ -91,11 +84,10 @@ export default function RegistrarEscalaPage() {
     setSelectedKey(key);
     const item = coverage.find((c) => `${c.sourceType}:${c.sourceId}` === key);
     const missing = item?.pastorals.filter((p) => !p.scheduled) ?? [];
-    // Se falta só uma pastoral, já vem selecionada
-    const auto = missing.length === 1 ? missing[0].id : null;
+    const auto = missing.length === 1 ? missing[0].id : null; // falta só uma: já vem selecionada
     setPastoralId(auto);
-    const autoRole = pastoralGroups.find((pg) => pg.id === auto)?.defaultRole ?? '';
-    resetAssignments(isCoordenador ? (pastoralGroups.find((pg) => pg.id === ownPastoralId)?.defaultRole ?? '') : autoRole);
+    const roleFor = isCoordenador ? ownPastoralId : auto;
+    resetAssignments(pastoralGroups.find((pg) => pg.id === roleFor)?.defaultRole ?? '');
   }
 
   function handleSelectPastoral(id: number) {
@@ -103,13 +95,9 @@ export default function RegistrarEscalaPage() {
     resetAssignments(pastoralGroups.find((pg) => pg.id === id)?.defaultRole ?? '');
   }
 
-  function updateRow(key: string, patch: Partial<AssignmentRow>) {
+  const updateRow = (key: string, patch: Partial<AssignmentRow>) =>
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  }
-
-  function removeRow(key: string) {
-    setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev));
-  }
+  const removeRow = (key: string) => setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev));
 
   function validate(): string | null {
     if (!selected) return `Selecione ${linkType === 'MASS' ? 'uma Missa' : 'um Evento'}.`;
@@ -125,7 +113,7 @@ export default function RegistrarEscalaPage() {
 
     const seen = new Set<string>();
     for (const r of filled) {
-      const k = `${r.volunteerId}:${r.role.trim().toLowerCase()}`;
+      const k = `${r.volunteerId}:${r.role.trim().toLowerCase().replace(/\s+/g, ' ')}`; // mesma normalização do back
       if (seen.has(k)) return 'Há um Voluntário duplicado na mesma função.';
       seen.add(k);
     }
@@ -135,12 +123,8 @@ export default function RegistrarEscalaPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-
     const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    if (validationError) return setError(validationError);
 
     const assignments: CreateScheduleAssignmentInput[] = rows.map((r) => ({
       volunteerId: Number(r.volunteerId),
@@ -148,16 +132,41 @@ export default function RegistrarEscalaPage() {
     }));
 
     try {
-      await createSchedule.mutateAsync({
+      const created = await createSchedule.mutateAsync({
         massId: selected!.sourceType === 'MASS' ? selected!.sourceId : undefined,
         eventId: selected!.sourceType === 'EVENT' ? selected!.sourceId : undefined,
         pastoralGroupId: effectivePastoralId!,
         assignments,
       });
-      router.push('/escalas');
+      if (created.warnings?.length) setWarnings(created.warnings); // mostra os avisos antes de sair
+      else router.push('/escalas');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao registrar escala.');
     }
+  }
+
+  if (warnings) {
+    return (
+      <>
+        <Header title="Escala registrada" onBack={() => router.push('/escalas')} />
+        <div className="space-y-3 py-6">
+          <p className="text-sm text-gray-700">A escala foi salva, mas há conflitos de horário para conferir:</p>
+          {warnings.map((w) => (
+            <p key={`${w.volunteerId}-${w.conflictsWith.scheduleId}`} className="rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800">
+              {w.volunteerName} também está escalado em “{w.conflictsWith.title}” (
+              {new Date(w.conflictsWith.date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}).
+            </p>
+          ))}
+          <button
+            type="button"
+            onClick={() => router.push('/escalas')}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+          >
+            Ir para Escalas
+          </button>
+        </div>
+      </>
+    );
   }
 
   return (
@@ -179,9 +188,7 @@ export default function RegistrarEscalaPage() {
                   type="button"
                   onClick={() => handleLinkTypeChange(type)}
                   className={`flex-1 rounded-lg border px-3 py-3 text-sm font-medium transition ${
-                    linkType === type
-                      ? 'border-gray-900 bg-gray-900 text-white'
-                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                    linkType === type ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
                   }`}
                 >
                   {type === 'MASS' ? 'Missa' : 'Evento'}
@@ -190,21 +197,17 @@ export default function RegistrarEscalaPage() {
             </div>
           </div>
 
+          {coverageLoading && <p className="text-sm text-gray-500">Carregando Missas e Eventos...</p>}
+          {coverageError && <p className="text-sm text-red-600">{coverageError.message}</p>}
+
           <ComboboxInput
             label={linkType === 'MASS' ? 'Missa' : 'Evento'}
             value={selectedKey}
             onChange={handleSelectSource}
             placeholder="Buscar por nome ou data..."
-            emptyMessage={
-              linkType === 'MASS'
-                ? 'Nenhuma missa com escala pendente.'
-                : 'Nenhum evento com escala pendente.'
-            }
+            emptyMessage={linkType === 'MASS' ? 'Nenhuma missa com escala pendente.' : 'Nenhum evento com escala pendente.'}
             required
-            options={options.map((c) => ({
-              value: `${c.sourceType}:${c.sourceId}`,
-              label: formatOptionLabel(c.title, c.date),
-            }))}
+            options={options.map((c) => ({ value: `${c.sourceType}:${c.sourceId}`, label: formatOptionLabel(c.title, c.date) }))}
           />
 
           {selected && (
@@ -240,9 +243,7 @@ export default function RegistrarEscalaPage() {
           {selected && effectivePastoralId && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700">
-                  Atribuições — {pastoral?.name}
-                </label>
+                <label className="text-sm font-medium text-gray-700">Atribuições — {pastoral?.name}</label>
                 <button
                   type="button"
                   onClick={() => setRows((prev) => [...prev, makeRow(defaultRole)])}
@@ -253,12 +254,11 @@ export default function RegistrarEscalaPage() {
               </div>
 
               <datalist id="role-suggestions">
-                {ROLE_SUGGESTIONS.map((role) => (
-                  <option key={role} value={role} />
-                ))}
+                {ROLE_SUGGESTIONS.map((role) => (<option key={role} value={role} />))}
               </datalist>
 
-              {pastoralVolunteers.length === 0 && (
+              {volunteersLoading && <p className="text-sm text-gray-500">Carregando voluntários...</p>}
+              {!volunteersLoading && pastoralVolunteers.length === 0 && (
                 <p className="text-sm text-amber-700">Esta Pastoral ainda não tem voluntários cadastrados.</p>
               )}
 
@@ -300,11 +300,7 @@ export default function RegistrarEscalaPage() {
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
-          <FormActions
-            onCancel={() => router.push('/escalas')}
-            submitLabel="Registrar Escala"
-            submitting={createSchedule.isPending}
-          />
+          <FormActions onCancel={() => router.push('/escalas')} submitLabel="Registrar Escala" submitting={createSchedule.isPending} />
         </form>
       </div>
     </>

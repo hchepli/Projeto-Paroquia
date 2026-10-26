@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Schedule } from '@/types/schedules/schedule';
+import Link from 'next/link';
 
 interface SchedulesTableProps {
   items: Schedule[];
@@ -92,12 +93,13 @@ export default function SchedulesTable({
               <th className="py-2 pr-4 font-normal">Função / Ministério</th>
               <th className="py-2 pr-4 font-normal">Membros escalados</th>
               <th className="py-2 text-center font-normal">Status</th>
+              <th className="py-2 pl-4 text-right font-normal">Ações</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-sm text-[rgba(0,0,0,0.4)]">
+                <td colSpan={6} className="py-6 text-center text-sm text-[rgba(0,0,0,0.4)]">
                   Carregando...
                 </td>
               </tr>
@@ -127,6 +129,11 @@ export default function SchedulesTable({
                       <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
                         Escalados
                       </span>
+                    </td>
+                    <td className="py-3 pl-4 text-right">
+                      <Link href={`/escalas/${schedule.id}`} className="text-sm font-medium text-[#701513] hover:underline">
+                        Abrir
+                      </Link>
                     </td>
                   </tr>
                 );

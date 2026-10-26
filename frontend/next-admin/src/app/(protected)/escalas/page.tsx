@@ -35,12 +35,14 @@ export default function EscalasPage() {
 
   const monthRange = getCurrentMonthRange();
 
-  const { data, isLoading } = useSchedules({
-    page,
-    limit: 10,
-    search: search || undefined,
-    pastoralGroupId: effectivePastoralGroupId,
-  });
+   const { data, isLoading } = useSchedules({
+     page,
+     limit: 10,
+     search: search || undefined,
+     pastoralGroupId: effectivePastoralGroupId,
+    startDate: monthRange.startISO,
+ endDate: monthRange.endISO,
+   });
 
   const { data: coverage = [], isLoading: coverageLoading } = useCoverage({
     startDate: monthRange.startISO,
