@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const backendRes = await apiFetch(`/announcements/draft?${searchParams.toString()}`, { token });
+  const backendRes = await apiFetch(`/announcements/admin?${searchParams.toString()}`, { token });
 
   if (!backendRes.ok) {
     const errorBody = await backendRes.json().catch(() => null);
@@ -18,8 +18,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const data = await backendRes.json();
-  return NextResponse.json(data);
+  return NextResponse.json(await backendRes.json());
 }
 
 export async function POST(req: NextRequest) {

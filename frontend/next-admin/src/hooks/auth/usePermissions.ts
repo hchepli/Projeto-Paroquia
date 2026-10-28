@@ -26,5 +26,7 @@ export function usePermissions() {
     canManageMasses: canManage,
     // Eventos e Confirmações de Presença: Admin Geral e Secretaria (Coordenador = leitura).
     canManageEvents: canManage,
+    canManageSacraments: canManage,
+    canManageAnnouncements: canManage,
   };
 }

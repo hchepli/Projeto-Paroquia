@@ -1,4 +1,4 @@
-// src/app/comunidade/eventos/[id]/page.tsx
+// src/app/(protected)/comunidade/eventos/[id]/page.tsx
 'use client';
 
 import { FormEvent, useState } from 'react';
@@ -53,29 +53,29 @@ export default function EventoDetailPage() {
         description={
           canManageEvents ? 'Atualize os dados do evento.' : 'Visualização somente leitura.'
         }
-        actions={[
-          ...(canManageEvents
+        actions={
+          canManageEvents
             ? [
                 {
                   label: 'Ver confirmações de presença',
                   onClick: () => router.push(`/comunidade/eventos/${eventId}/confirmacoes`),
                 },
               ]
-            : []),
-          { label: 'Voltar para Eventos', onClick: () => router.push('/comunidade/eventos') },
-        ]}
-        onBack={() => router.back()}
+            : []
+        }
+        onBack={() => router.push('/comunidade/eventos')}
       />
 
       {event.status === 'CANCELLED' && (
         <div className="mt-6 max-w-2xl rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Este evento está cancelado: não aparece no calendário nem no site. Altere o status para
-          &quot;Ativo&quot; para reativá-lo.
+          Este evento está cancelado: não aparece no calendário nem no site.
+          {canManageEvents && ' Altere o status para "Ativo" para reativá-lo.'}
         </div>
       )}
 
+      {/* key só por id (padrão de Missa): refetch/edição de outro admin não descarta o que está sendo digitado. */}
       <EventEditForm
-        key={`${event.id}-${event.updatedAt}`}
+        key={event.id}
         event={event}
         readOnly={!canManageEvents}
         onRequestDelete={() => setDeleteOpen(true)}
@@ -103,8 +103,6 @@ function EventEditForm({
 }) {
   const router = useRouter();
   const updateEvent = useUpdateEvent();
-  // Inicializa uma vez por versão do evento: refetch em segundo plano com o mesmo
-  // updatedAt não sobrescreve o que o usuário está digitando.
   const [values, setValues] = useState<EventFormValues>(() => eventToFormValues(event));
   const [error, setError] = useState<string | null>(null);
 

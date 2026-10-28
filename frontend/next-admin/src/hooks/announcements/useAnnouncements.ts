@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Announcement, AnnouncementStatus } from '@/types/announcements/announcement';
 import { PaginatedResult } from '@/types/pagination';
 
@@ -25,7 +25,8 @@ async function fetchAnnouncements(
 
 export function useAnnouncements(params: UseAnnouncementsParams = {}) {
   return useQuery({
-    queryKey: ['announcements', params],
+    queryKey: ['announcements', 'list', params],
     queryFn: () => fetchAnnouncements(params),
+    placeholderData: keepPreviousData, // sem "piscar" ao paginar/buscar
   });
 }

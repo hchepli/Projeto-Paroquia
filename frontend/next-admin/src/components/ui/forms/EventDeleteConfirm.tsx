@@ -9,6 +9,9 @@ import { getFriendlyErrorMessage } from '@/lib/errors';
 interface EventRef {
   id: number;
   name: string;
+  /** Opcionais: quando presentes, o aviso mostra o que será apagado/desvinculado. */
+  _count?: { attendanceConfirmations: number };
+  albums?: { id: number; title: string }[];
 }
 
 interface ContentProps {
@@ -22,6 +25,9 @@ export function EventDeleteContent({ event, onCancel, onDeleted }: ContentProps)
   const deleteEvent = useDeleteEvent();
   const [conflict, setConflict] = useState<EventHasSchedulesError | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const attendance = event._count?.attendanceConfirmations;
+  const albums = event.albums ?? [];
 
   async function run(confirm: boolean) {
     setError(null);
@@ -49,8 +55,8 @@ export function EventDeleteContent({ event, onCancel, onDeleted }: ContentProps)
               <ul className="list-disc pl-5">
                 {conflict.schedules.map((s) => (
                   <li key={s.id}>
-                    {typeof s.pastoralGroup === 'string' ? s.pastoralGroup : s.pastoralGroup?.name}{' '}
-                    — {s.assignmentsCount} escalado(s)
+                    {s.pastoralGroup?.name ?? 'Sem pastoral'} — {s.assignmentsCount}{' '}
+                    {s.assignmentsCount === 1 ? 'atribuição' : 'atribuições'}
                   </li>
                 ))}
               </ul>
@@ -75,9 +81,19 @@ export function EventDeleteContent({ event, onCancel, onDeleted }: ContentProps)
       ) : (
         <>
           <p>
-            Remover o evento <strong>{event.name}</strong>? As confirmações de presença
-            registradas também serão apagadas. Esta ação não pode ser desfeita.
+            Remover o evento <strong>{event.name}</strong>?{' '}
+            {attendance !== undefined
+              ? `As ${attendance} confirmação(ões) de presença registradas também serão apagadas.`
+              : 'As confirmações de presença registradas também serão apagadas.'}{' '}
+            Esta ação não pode ser desfeita.
           </p>
+          {albums.length > 0 && (
+            <p>
+              {albums.length === 1 ? 'O álbum' : 'Os álbuns'}{' '}
+              <strong>{albums.map((a) => a.title).join(', ')}</strong> ficará(ão) sem vínculo com
+              evento (não será(ão) apagado(s)).
+            </p>
+          )}
           <p className="text-gray-500">
             Se só quer tirar o evento do ar, use &quot;Cancelar evento&quot; (reversível).
           </p>

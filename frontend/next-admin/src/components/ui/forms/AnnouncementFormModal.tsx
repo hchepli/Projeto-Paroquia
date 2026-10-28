@@ -1,9 +1,10 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/ui/modals/Modal';
 import { Announcement } from '@/types/announcements/announcement';
+import { useAnnouncementCategories } from '@/hooks/categories/useCategories';
 
 interface AnnouncementFormModalProps {
   open: boolean;
@@ -11,17 +12,8 @@ interface AnnouncementFormModalProps {
   announcement?: Announcement;
 }
 
-interface Category {
-  id: number;
-  name: string;
-  type: 'EVENT' | 'ANNOUNCEMENT';
-}
-
-async function fetchCategories(): Promise<Category[]> {
-  const response = await fetch('/api/categories');
-  if (!response.ok) throw new Error('Erro ao buscar categorias');
-  return response.json();
-}
+const inputClass =
+  'rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#701513]';
 
 export default function AnnouncementFormModal({
   open,
@@ -30,42 +22,23 @@ export default function AnnouncementFormModal({
 }: AnnouncementFormModalProps) {
   const queryClient = useQueryClient();
   const isEditing = Boolean(announcement);
-
-  const { data: categories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: fetchCategories,
-    enabled: open,
-  });
-  const announcementCategories = (categories ?? []).filter((c) => c.type === 'ANNOUNCEMENT');
+const { data: categories } = useAnnouncementCategories();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('PUBLISHED');
-  // imageUrl fica como texto simples por enquanto — upload real (Cloudflare R2)
-  // ainda não existe pra Announcement, só pra Photo (roadmap-upload-fotos.md).
   const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Sempre que o modal abrir (seja pra criar ou editar), sincroniza o form
-  // com o registro recebido — ou limpa, se for criação.
   useEffect(() => {
     if (!open) return;
-
-    if (announcement) {
-      setTitle(announcement.title);
-      setContent(announcement.content);
-      setCategoryId(announcement.categoryId ? String(announcement.categoryId) : '');
-      setStatus(announcement.status);
-      setImageUrl(announcement.imageUrl ?? '');
-    } else {
-      setTitle('');
-      setContent('');
-      setCategoryId('');
-      setStatus('PUBLISHED');
-      setImageUrl('');
-    }
+    setTitle(announcement?.title ?? '');
+    setContent(announcement?.content ?? '');
+    setCategoryId(announcement?.categoryId ? String(announcement.categoryId) : '');
+    setStatus(announcement?.status ?? 'PUBLISHED');
+    setImageUrl(announcement?.imageUrl ?? '');
     setError(null);
   }, [open, announcement]);
 
@@ -76,9 +49,10 @@ export default function AnnouncementFormModal({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     setError(null);
 
-    if (!title || !content) {
+    if (!title.trim() || !content.trim()) {
       setError('Preencha título e conteúdo.');
       return;
     }
@@ -86,31 +60,32 @@ export default function AnnouncementFormModal({
     setSubmitting(true);
     try {
       const url = isEditing ? `/api/announcements/${announcement!.id}` : '/api/announcements';
-      const method = isEditing ? 'PATCH' : 'POST';
-
       const response = await fetch(url, {
-        method,
+        method: isEditing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title,
-          content,
-          categoryId: categoryId ? Number(categoryId) : undefined,
+          title: title.trim(),
+          content: content.trim(),
+          // null = limpar (PATCH); undefined seria ignorado e o valor antigo ficaria
+          categoryId: categoryId ? Number(categoryId) : null,
+          imageUrl: imageUrl.trim() || null,
           status,
-          imageUrl: imageUrl || undefined,
-          // authorId NÃO vai no body — preenchido pelo backend a partir do usuário logado.
         }),
       });
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.message ?? `Erro ao ${isEditing ? 'atualizar' : 'criar'} comunicado.`);
+        const message = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
+        throw new Error(message ?? `Erro ao ${isEditing ? 'atualizar' : 'criar'} comunicado.`);
       }
 
       await queryClient.invalidateQueries({ queryKey: ['announcements'] });
       handleClose();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : `Erro ao ${isEditing ? 'atualizar' : 'criar'} comunicado.`,
+        err instanceof Error
+          ? err.message
+          : `Erro ao ${isEditing ? 'atualizar' : 'criar'} comunicado.`,
       );
     } finally {
       setSubmitting(false);
@@ -122,12 +97,7 @@ export default function AnnouncementFormModal({
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label className="text-[13px] font-medium text-gray-700">Título</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#701513]"
-            placeholder="Atenção: os horários..."
-          />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
         </div>
 
         <div className="flex flex-col gap-1">
@@ -135,20 +105,16 @@ export default function AnnouncementFormModal({
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#701513]"
-            rows={4}
+            className={inputClass}
+            rows={5}
           />
         </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-[13px] font-medium text-gray-700">Categoria (opcional)</label>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#701513]"
-          >
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass}>
             <option value="">Nenhuma</option>
-            {announcementCategories.map((c) => (
+            {(categories ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -161,8 +127,8 @@ export default function AnnouncementFormModal({
           <input
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#701513]"
-            placeholder="https://..."
+            className={inputClass}
+            placeholder="https://res.cloudinary.com/..."
           />
         </div>
 
@@ -171,7 +137,7 @@ export default function AnnouncementFormModal({
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as 'DRAFT' | 'PUBLISHED')}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#701513]"
+            className={inputClass}
           >
             <option value="PUBLISHED">Publicado</option>
             <option value="DRAFT">Rascunho (oculto)</option>

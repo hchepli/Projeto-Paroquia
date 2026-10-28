@@ -4,8 +4,8 @@ import { EventDeleteResult } from '@/types/events/events';
 import { throwApiError } from '@/lib/errors';
 
 export interface EventScheduleConflict {
-  id: number;
-  pastoralGroup: string | { name: string };
+  id: string; // Schedule.id é UUID
+  pastoralGroup: { id: number; name: string } | null;
   assignmentsCount: number;
 }
 

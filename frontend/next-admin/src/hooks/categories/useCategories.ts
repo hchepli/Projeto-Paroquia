@@ -26,3 +26,13 @@ export function useEventCategories() {
   const data = useMemo(() => (query.data ?? []).filter((c) => c.type === 'EVENT'), [query.data]);
   return { ...query, data };
 }
+
+/** Só categorias do tipo ANNOUNCEMENT (o back valida o tipo em categoryId). */
+export function useAnnouncementCategories() {
+  const query = useCategories();
+  const data = useMemo(
+    () => (query.data ?? []).filter((c) => c.type === 'ANNOUNCEMENT'),
+    [query.data],
+  );
+  return { ...query, data };
+}

@@ -1,4 +1,4 @@
-// src/app/comunidade/eventos/[id]/confirmacoes/page.tsx
+// src/app/(protected)/comunidade/eventos/[id]/confirmacoes/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -72,9 +72,12 @@ export default function ConfirmacoesPresencaPage() {
   async function handleConfirmDelete() {
     if (!toDelete) return;
     setDeleteError(null);
+    // Se for o último item de uma página > 1, volta uma página (evita página vazia).
+    const wasLastOnPage = (data?.data.length ?? 0) === 1 && page > 1;
     try {
       await deleteConfirmation.mutateAsync(toDelete.id);
       setToDelete(null);
+      if (wasLastOnPage) setPage((p) => Math.max(1, p - 1));
     } catch (err) {
       setDeleteError(getFriendlyErrorMessage(err, 'Erro ao excluir confirmação.'));
     }
@@ -105,7 +108,7 @@ export default function ConfirmacoesPresencaPage() {
     <>
       <Header
         title={`Confirmações de presença${data ? ` — ${data.event.name}` : ''}`}
-        description="RN012: registro informativo, não reserva lugar."
+        description="Registro informativo: não reserva lugar (RN012)."
         actions={[{ label: 'Voltar para o evento', onClick: backToEvent }]}
         onBack={() => router.back()}
       />

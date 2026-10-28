@@ -1,6 +1,7 @@
-// src/types/categories/category.ts
+export type CategoryType = 'EVENT' | 'ANNOUNCEMENT';
+
 export interface Category {
   id: number;
   name: string;
-  type: 'EVENT' | 'ANNOUNCEMENT';
+  type: CategoryType;
 }

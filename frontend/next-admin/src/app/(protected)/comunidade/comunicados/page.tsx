@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CalendarDays, CheckCircle2, EyeOff, Newspaper } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { CalendarDays, CheckCircle2, EyeOff, Newspaper } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
 import GenericTable, {
@@ -13,32 +14,13 @@ import GenericTable, {
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import AnnouncementFormModal from '@/components/ui/forms/AnnouncementFormModal';
 import { useAnnouncements } from '@/hooks/announcements/useAnnouncements';
+import { useAnnouncementStats } from '@/hooks/announcements/useAnnouncementStats';
+import { useAnnouncementCategories } from '@/hooks/categories/useCategories';
+import { useDebounce } from '@/hooks/useDebounce';
+import { usePermissions } from '@/hooks/auth/usePermissions';
 import { Announcement, AnnouncementStatus } from '@/types/announcements/announcement';
-import { useRouter } from 'next/navigation';
 
 type StatusFilter = 'ALL' | AnnouncementStatus;
-
-interface Category {
-  id: number;
-  name: string;
-  type: 'EVENT' | 'ANNOUNCEMENT';
-}
-
-async function fetchCategories(): Promise<Category[]> {
-  const response = await fetch('/api/categories');
-  if (!response.ok) throw new Error('Erro ao buscar categorias');
-  return response.json();
-}
-
-function isThisMonth(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR');
-}
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Todas' },
@@ -46,50 +28,53 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'DRAFT', label: 'Ocultos' },
 ];
 
+const formatDate = (d: string) => new Date(d).toLocaleDateString('pt-BR');
+
 export default function ComunicadosPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
+  const { canManageAnnouncements } = usePermissions();
+
+  const [searchInput, setSearchInput] = useState('');
+  const search = useDebounce(searchInput, 400);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [page, setPage] = useState(1);
-  const [openFormModal, setOpenFormModal] = useState(false);
-  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
-  const router = useRouter();
+  const [editing, setEditing] = useState<Announcement | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const { data: tableData, isLoading: tableLoading } = useAnnouncements({
+  const {
+    data: tableData,
+    isLoading: tableLoading,
+    isError: tableError,
+  } = useAnnouncements({
     search,
     page,
     limit: 10,
     status: statusFilter === 'ALL' ? undefined : statusFilter,
   });
-
-  const { data: totalData } = useAnnouncements({ limit: 1 });
-  const { data: publishedData } = useAnnouncements({ status: 'PUBLISHED', limit: 1 });
-  const { data: draftData } = useAnnouncements({ status: 'DRAFT', limit: 1 });
-
-  const { data: recentData } = useAnnouncements({ limit: 100 });
-  const thisMonthCount = useMemo(
-    () => (recentData?.data ?? []).filter((a) => isThisMonth(a.createdAt)).length,
-    [recentData],
-  );
-
-  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: fetchCategories });
+  const { data: stats } = useAnnouncementStats();
+  const { data: categories } = useAnnouncementCategories();
 
   const categoryNameById = useMemo(() => {
     const map: Record<number, string> = {};
-    (categories ?? []).forEach((c) => {
-      map[c.id] = c.name;
-    });
+    (categories ?? []).forEach((c) => (map[c.id] = c.name));
     return map;
   }, [categories]);
 
-  const items = tableData?.data ?? [];
-  const totalCount = totalData?.total ?? 0;
-  const publishedCount = publishedData?.total ?? 0;
-  const draftCount = draftData?.total ?? 0;
+  if (!canManageAnnouncements) {
+    return (
+      <>
+        <Header title="Comunicados" description="" onBack={() => router.back()} />
+        <p className="mt-8 text-sm text-[rgba(0,0,0,0.7)]">
+          Você não tem permissão para gerenciar comunicados.
+        </p>
+      </>
+    );
+  }
 
   function handleSearchChange(value: string) {
-    setSearch(value);
+    setSearchInput(value);
     setPage(1);
   }
 
@@ -98,77 +83,81 @@ export default function ComunicadosPage() {
     setPage(1);
   }
 
-  function handleEdit(announcement: Announcement) {
-    setEditingAnnouncement(announcement);
-    setOpenFormModal(true);
-  }
-
-  function handleNew() {
-    setEditingAnnouncement(null);
-    setOpenFormModal(true);
-  }
-
-  function handleCloseModal() {
-    setOpenFormModal(false);
-    setEditingAnnouncement(null);
-  }
-
   function toggleOcultosCard() {
-    setStatusFilter((prev) => (prev === 'DRAFT' ? 'ALL' : 'DRAFT'));
-    setPage(1);
+    handleStatusFilterChange(statusFilter === 'DRAFT' ? 'ALL' : 'DRAFT');
   }
 
-  // Movido de dentro da antiga AnnouncementsTable pra cá — a mutation não
-  // deve viver num componente de apresentação (achado do Bloco A/Dia 1).
-  async function handleToggleStatus(announcement: Announcement) {
-    const nextStatus = announcement.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
-    setTogglingId(announcement.id);
+  async function mutate(
+    announcement: Announcement,
+    request: () => Promise<Response>,
+    fallbackMessage: string,
+  ) {
+    setBusyId(announcement.id);
+    setActionError(null);
     try {
-      const res = await fetch(`/api/announcements/${announcement.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      if (!res.ok) throw new Error('Falha ao atualizar status.');
+      const res = await request();
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message ?? fallbackMessage);
+      }
       await queryClient.invalidateQueries({ queryKey: ['announcements'] });
-    } catch {
-      // Erro silencioso por ora — sem componente de toast definido ainda.
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : fallbackMessage);
     } finally {
-      setTogglingId(null);
+      setBusyId(null);
     }
   }
 
+  function handleToggleStatus(a: Announcement) {
+    const nextStatus = a.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
+    return mutate(
+      a,
+      () =>
+        fetch(`/api/announcements/${a.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: nextStatus }),
+        }),
+      'Falha ao atualizar status.',
+    );
+  }
+
+  function handleDelete(a: Announcement) {
+    if (!window.confirm(`Remover o comunicado "${a.title}"? Essa ação não pode ser desfeita.`)) {
+      return;
+    }
+    return mutate(
+      a,
+      () => fetch(`/api/announcements/${a.id}`, { method: 'DELETE' }),
+      'Falha ao remover comunicado.',
+    );
+  }
+
   const columns: GenericTableColumn<Announcement>[] = [
-    {
-      key: 'date',
-      label: 'Data',
-      render: (item) => formatDate(item.createdAt),
-    },
-    {
-      key: 'title',
-      label: 'Aviso',
-      render: (item) => item.title,
-    },
+    { key: 'date', label: 'Data', render: (item) => formatDate(item.createdAt) },
+    { key: 'title', label: 'Aviso', render: (item) => item.title },
     {
       key: 'category',
       label: 'Tipo',
       render: (item) => (
         <span className="rounded-full bg-[rgba(0,0,0,0.05)] px-2 py-1 text-xs font-medium text-[rgba(0,0,0,0.7)]">
-          {item.categoryId ? categoryNameById[item.categoryId] ?? '—' : 'Sem categoria'}
+          {item.categoryId ? (categoryNameById[item.categoryId] ?? '—') : 'Sem categoria'}
         </span>
       ),
     },
   ];
 
   const actions: GenericTableAction<Announcement>[] = [
-    {
-      label: 'Editar',
-      onClick: handleEdit,
-    },
+    { label: 'Editar', onClick: setEditing },
     {
       label: (item) => (item.status === 'PUBLISHED' ? 'Ocultar' : 'Publicar'),
       onClick: handleToggleStatus,
-      disabled: (item) => togglingId === item.id,
+      disabled: (item) => busyId === item.id,
+    },
+    {
+      label: 'Remover',
+      onClick: handleDelete,
+      disabled: (item) => busyId === item.id,
     },
   ];
 
@@ -187,40 +176,46 @@ export default function ComunicadosPage() {
       <Header
         title="Comunicados"
         description="Gerencie os avisos e notícias da paróquia"
-        actions={[{ label: 'Registrar Comunicado', onClick: handleNew }]}
+        actions={[
+          {
+            label: 'Registrar Comunicado',
+            onClick: () => router.push('/comunidade/comunicados/registrar'),
+          },
+        ]}
         onBack={() => router.back()}
       />
 
       <div className="mt-8 grid grid-cols-4 gap-4">
-        <Card icon={Newspaper} title="Total de Comunicados" value={totalCount} />
-        <Card icon={CheckCircle2} title="Publicados" value={publishedCount} />
+        <Card icon={Newspaper} title="Total de Comunicados" value={stats?.total ?? 0} />
+        <Card icon={CheckCircle2} title="Publicados" value={stats?.published ?? 0} />
         <Card
           icon={EyeOff}
           title="Ocultos"
-          value={draftCount}
+          value={stats?.draft ?? 0}
           onClick={toggleOcultosCard}
           active={statusFilter === 'DRAFT'}
         />
-        <Card icon={CalendarDays} title="Criados este mês" value={thisMonthCount} />
+        <Card icon={CalendarDays} title="Criados este mês" value={stats?.thisMonth ?? 0} />
       </div>
+
+      {(actionError || tableError) && (
+        <p className="mt-4 text-sm text-red-600">
+          {actionError ?? 'Erro ao carregar comunicados. Tente novamente.'}
+        </p>
+      )}
 
       <div className="my-6">
         <GenericTable
           columns={columns}
-          items={items}
+          items={tableData?.data ?? []}
           rowKey={(item) => item.id}
           actions={actions}
           isLoading={tableLoading}
           emptyMessage="Nenhum comunicado encontrado."
-          search={search}
+          search={searchInput}
           onSearchChange={handleSearchChange}
           searchPlaceholder="Buscar aviso..."
           filters={filters}
-          headerSlot={
-            <button className="flex shrink-0 items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.1)] px-3 py-2 text-sm font-medium text-[rgba(0,0,0,0.7)] hover:bg-gray-50">
-              Ver Todas <ArrowRight size={14} />
-            </button>
-          }
         />
         <PaginationControls
           page={tableData?.page ?? 1}
@@ -230,9 +225,9 @@ export default function ComunicadosPage() {
       </div>
 
       <AnnouncementFormModal
-        open={openFormModal}
-        onClose={handleCloseModal}
-        announcement={editingAnnouncement ?? undefined}
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        announcement={editing ?? undefined}
       />
     </>
   );

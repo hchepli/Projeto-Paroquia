@@ -12,12 +12,11 @@ export interface UseAttendanceConfirmationsParams {
   enabled?: boolean;
 }
 
-async function fetchConfirmations(
-  params: UseAttendanceConfirmationsParams,
-): Promise<AttendanceConfirmationsPage> {
+type FetchParams = Omit<UseAttendanceConfirmationsParams, 'enabled'>;
+
+async function fetchConfirmations(params: FetchParams): Promise<AttendanceConfirmationsPage> {
   const query = new URLSearchParams();
-  const { enabled: _enabled, ...rest } = params;
-  Object.entries(rest).forEach(([key, value]) => {
+  Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
   });
 
@@ -26,11 +25,15 @@ async function fetchConfirmations(
   return res.json();
 }
 
-export function useAttendanceConfirmations(params: UseAttendanceConfirmationsParams) {
+export function useAttendanceConfirmations({
+  enabled = true,
+  ...params
+}: UseAttendanceConfirmationsParams) {
   return useQuery({
+    // `enabled` fora da key: alternar a permissão não cria entrada de cache nova.
     queryKey: ['attendance-confirmations', params],
     queryFn: () => fetchConfirmations(params),
-    enabled: params.eventId !== null && (params.enabled ?? true),
+    enabled: params.eventId !== null && enabled,
     retry: (count, err) => !(err as { status?: number }).status && count < 2, // não repete 4xx
   });
 }

@@ -31,17 +31,17 @@ export interface AdminEvent extends Event {
   categoryId?: number | null;
   createdAt: string;
   updatedAt: string;
-  // Só no detalhe:
   mass?: { id: number; title: string; dateTime: string } | null;
   albums?: { id: number; title: string; slug: string }[];
   // Só vem para Admin Geral/Secretaria.
   _count?: { attendanceConfirmations: number };
 }
 
+/** Retorno de DELETE /events/:id (o back devolve a lista de álbuns desvinculados). */
 export interface EventDeleteResult {
   id: number;
   name: string;
   removedSchedules: number;
   removedAttendanceConfirmations: number;
-  unlinkedAlbums: number;
+  unlinkedAlbums: { id: number; title: string }[];
 }

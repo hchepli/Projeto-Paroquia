@@ -1,89 +1,63 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import TextInput from '@/components/ui/inputs/TextInput';
 import TextareaInput from '@/components/ui/inputs/TextareaInput';
 import SelectInput from '@/components/ui/inputs/SelectInput';
-import ImageInput from '@/components/ui/inputs/ImageInput';
 import FormActions from '@/components/ui/buttons/FormActions';
-import { useRouter } from 'next/navigation';
-
-interface Category {
-  id: number;
-  name: string;
-  type: 'EVENT' | 'ANNOUNCEMENT';
-}
-
-async function fetchCategories(): Promise<Category[]> {
-  const response = await fetch('/api/categories');
-  if (!response.ok) throw new Error('Erro ao buscar categorias');
-  return response.json();
-}
+import { useAnnouncementCategories } from '@/hooks/categories/useCategories';
 
 export default function RegistrarComunicadoPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
-
-  const { data: categories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: fetchCategories,
-  });
-  const announcementCategories = (categories ?? []).filter((c) => c.type === 'ANNOUNCEMENT');
+  const { data: categories } = useAnnouncementCategories();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('PUBLISHED');
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const router = useRouter();
-
-  function handleCancel() {
-    // TODO: confirmar estratégia de "voltar" (Bloco 9, Dia 1 do roadmap)
-    window.history.back();
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     setError(null);
 
-    if (!title || !content) {
+    if (!title.trim() || !content.trim()) {
       setError('Preencha título e conteúdo.');
       return;
     }
 
     setSubmitting(true);
     try {
-      // TODO: se imageFile existir, subir pro Cloudinary primeiro e pegar a
-      // URL de retorno (fluxo/endpoint ainda a confirmar com você) antes de
-      // montar o payload abaixo com imageUrl.
-
       const response = await fetch('/api/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title,
-          content,
+          title: title.trim(),
+          content: content.trim(),
           categoryId: categoryId ? Number(categoryId) : undefined,
           status,
-          imageUrl: undefined, // TODO: preencher com a URL do Cloudinary
-          // authorId NÃO vai no body — preenchido pelo backend a partir do usuário logado.
+          imageUrl: imageUrl.trim() || undefined,
         }),
       });
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.message ?? 'Erro ao criar comunicado.');
+        const message = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
+        throw new Error(message ?? 'Erro ao criar comunicado.');
       }
 
       await queryClient.invalidateQueries({ queryKey: ['announcements'] });
-      // TODO: redirecionar pra /comunidade/comunicados (ver estratégia do Bloco 9, Dia 1)
+      router.push('/comunidade/comunicados');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar comunicado.');
-    } finally {
-      setSubmitting(false);
+      setSubmitting(false); // em sucesso mantém travado até a navegação
     }
   }
 
@@ -105,29 +79,21 @@ export default function RegistrarComunicadoPage() {
             required
           />
 
-          <TextareaInput
-            label="Conteúdo"
-            value={content}
-            onChange={setContent}
-            rows={4}
-            required
-          />
+          <TextareaInput label="Conteúdo" value={content} onChange={setContent} rows={6} required />
 
           <SelectInput
             label="Categoria"
             value={categoryId}
             onChange={setCategoryId}
             placeholder="Nenhuma"
-            options={announcementCategories.map((c) => ({
-              value: String(c.id),
-              label: c.name,
-            }))}
+            options={(categories ?? []).map((c) => ({ value: String(c.id), label: c.name }))}
           />
 
-          <ImageInput
-            label="Imagem"
-            file={imageFile}
-            onChange={setImageFile}
+          <TextInput
+            label="Imagem (URL, opcional)"
+            value={imageUrl}
+            onChange={setImageUrl}
+            placeholder="https://res.cloudinary.com/..."
           />
 
           <SelectInput
@@ -145,7 +111,7 @@ export default function RegistrarComunicadoPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <FormActions
-            onCancel={handleCancel}
+            onCancel={() => router.back()}
             submitLabel="Criar Comunicado"
             submitting={submitting}
           />

@@ -31,7 +31,7 @@ export function eventToFormValues(event: AdminEvent): EventFormValues {
   return {
     name: event.name,
     description: event.description ?? '',
-    startDate: toDateTimeLocalValue(event.startDate), // hora LOCAL (corrige bug do slice UTC)
+    startDate: toDateTimeLocalValue(event.startDate), // hora LOCAL
     endDate: event.endDate ? toDateTimeLocalValue(event.endDate) : '',
     location: event.location,
     categoryId: String(event.categoryId ?? event.category?.id ?? ''),
@@ -97,9 +97,16 @@ export function buildEventPayload(v: EventFormValues, mode: 'create' | 'edit'): 
   };
 }
 
+/** Código do 409 ao desvincular Pastoral que já tem Escala (back: events.service). */
+export const PASTORAL_HAS_SCHEDULE_CODE = 'EVENT_PASTORAL_HAS_SCHEDULE';
+
 export function getEventSaveError(err: unknown, fallback: string): string {
-  if (err instanceof ApiError && err.status === 409 && /pastoral|escala/i.test(err.message)) {
-    return `${err.message} Remova a escala dessa Pastoral (página Escalas) antes de desvinculá-la.`;
+  if (err instanceof ApiError && err.status === 409) {
+    const code = (err.body as { code?: string } | null)?.code;
+    // Regex fica como fallback enquanto o back sem `code` ainda estiver em uso.
+    if (code === PASTORAL_HAS_SCHEDULE_CODE || (!code && /pastoral|escala/i.test(err.message))) {
+      return `${err.message} Remova a escala dessa Pastoral (página Escalas) antes de desvinculá-la.`;
+    }
   }
   return getFriendlyErrorMessage(err, fallback);
 }
