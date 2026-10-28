@@ -1,11 +1,25 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsPositive, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsPositive,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { IsContact } from '../../common/validators/is-contact.validator';
 
 export class CreateAttendanceConfirmationDto {
-  @ApiProperty({ description: 'Nome do participante', example: 'João da Silva', maxLength: 150 })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value))
+  @ApiProperty({
+    description: 'Nome do participante',
+    example: 'João da Silva',
+    maxLength: 150,
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value,
+  )
   @IsString()
   @IsNotEmpty()
   @MinLength(2)
@@ -14,7 +28,8 @@ export class CreateAttendanceConfirmationDto {
   name!: string;
 
   @ApiProperty({
-    description: 'E-mail ou telefone com DDD. É normalizado (e-mail minúsculo; telefone só dígitos, sem +55).',
+    description:
+      'E-mail ou telefone com DDD. É normalizado (e-mail minúsculo; telefone só dígitos, sem +55).',
     example: 'joao.silva@example.com ou (47) 99999-0000',
     maxLength: 150,
   })

@@ -1,5 +1,10 @@
 // src/pastoral-groups/pastoral-groups.service.ts
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
@@ -25,7 +30,10 @@ export class PastoralGroupsService {
     try {
       return await this.prismaService.pastoralGroup.create({ data: dto });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException(DUPLICATE_NAME);
       }
       throw error;
@@ -49,11 +57,15 @@ export class PastoralGroupsService {
   }
 
   findAllInternal() {
-    return this.prismaService.pastoralGroup.findMany({ orderBy: { name: 'asc' } });
+    return this.prismaService.pastoralGroup.findMany({
+      orderBy: { name: 'asc' },
+    });
   }
 
   async findOneInternal(id: number) {
-    const pastoral = await this.prismaService.pastoralGroup.findUnique({ where: { id } });
+    const pastoral = await this.prismaService.pastoralGroup.findUnique({
+      where: { id },
+    });
     if (!pastoral) throw new NotFoundException('Pastoral não encontrada');
     return pastoral;
   }
@@ -64,18 +76,28 @@ export class PastoralGroupsService {
     if (user.roleName === ROLE_NAMES.COORDENADOR) {
       // RN006: só a própria pastoral
       if (user.pastoralGroupId == null || id !== user.pastoralGroupId) {
-        throw new ForbiddenException('Você só pode editar sua própria pastoral.');
+        throw new ForbiddenException(
+          'Você só pode editar sua própria pastoral.',
+        );
       }
       // UC033: Coordenador edita o CONTEÚDO, não a identidade da pastoral
       if (dto.name !== undefined && dto.name !== current.name) {
-        throw new ForbiddenException('Apenas o Admin Geral pode alterar o nome da pastoral.');
+        throw new ForbiddenException(
+          'Apenas o Admin Geral pode alterar o nome da pastoral.',
+        );
       }
     }
 
     try {
-      return await this.prismaService.pastoralGroup.update({ where: { id }, data: dto });
+      return await this.prismaService.pastoralGroup.update({
+        where: { id },
+        data: dto,
+      });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException(DUPLICATE_NAME);
       }
       throw error;

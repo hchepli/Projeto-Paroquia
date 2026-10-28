@@ -10,11 +10,30 @@ export class PrismaExceptionFilter implements ExceptionFilter {
   catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
 
-    const map: Record<string, { status: number; message: string; error: string }> = {
-      P2000: { status: 400, message: 'Algum campo excede o tamanho permitido.', error: 'Bad Request' },
-      P2002: { status: 409, message: 'Já existe um registro com esses dados.', error: 'Conflict' },
-      P2003: { status: 409, message: 'A operação conflita com um registro vinculado.', error: 'Conflict' },
-      P2025: { status: 404, message: 'Registro não encontrado.', error: 'Not Found' },
+    const map: Record<
+      string,
+      { status: number; message: string; error: string }
+    > = {
+      P2000: {
+        status: 400,
+        message: 'Algum campo excede o tamanho permitido.',
+        error: 'Bad Request',
+      },
+      P2002: {
+        status: 409,
+        message: 'Já existe um registro com esses dados.',
+        error: 'Conflict',
+      },
+      P2003: {
+        status: 409,
+        message: 'A operação conflita com um registro vinculado.',
+        error: 'Conflict',
+      },
+      P2025: {
+        status: 404,
+        message: 'Registro não encontrado.',
+        error: 'Not Found',
+      },
     };
 
     const known = map[exception.code];
@@ -26,7 +45,12 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       });
     }
 
-    this.logger.error(`Erro Prisma não mapeado: ${exception.code}`, exception.stack);
-    return res.status(500).json({ statusCode: 500, message: 'Erro interno do servidor' });
+    this.logger.error(
+      `Erro Prisma não mapeado: ${exception.code}`,
+      exception.stack,
+    );
+    return res
+      .status(500)
+      .json({ statusCode: 500, message: 'Erro interno do servidor' });
   }
 }

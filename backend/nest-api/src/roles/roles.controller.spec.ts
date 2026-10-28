@@ -9,7 +9,13 @@ import { ROLE_NAMES } from '../common/constrants/role-names.constants';
 
 describe('RolesController', () => {
   let controller: RolesController;
-  const service = { create: jest.fn(), findAll: jest.fn(), findOne: jest.fn(), update: jest.fn(), remove: jest.fn() };
+  const service = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -21,7 +27,9 @@ describe('RolesController', () => {
   });
 
   it('protege o controller inteiro para Admin Geral', () => {
-    expect(Reflect.getMetadata(ROLES_KEY, RolesController)).toEqual([ROLE_NAMES.ADMIN]);
+    expect(Reflect.getMetadata(ROLES_KEY, RolesController)).toEqual([
+      ROLE_NAMES.ADMIN,
+    ]);
   });
 
   it('remove repassa confirmBase', async () => {
@@ -42,10 +50,14 @@ describe('PermissionController', () => {
       providers: [{ provide: PermissionService, useValue: {} }],
     }).compile();
     expect(module.get(PermissionController)).toBeDefined();
-    expect(Reflect.getMetadata(ROLES_KEY, PermissionController)).toEqual([ROLE_NAMES.ADMIN]);
+    expect(Reflect.getMetadata(ROLES_KEY, PermissionController)).toEqual([
+      ROLE_NAMES.ADMIN,
+    ]);
   });
 
   it('a rota é /permissions (plural, RNF013)', () => {
-    expect(Reflect.getMetadata('path', PermissionController)).toBe('permissions');
+    expect(Reflect.getMetadata('path', PermissionController)).toBe(
+      'permissions',
+    );
   });
 });

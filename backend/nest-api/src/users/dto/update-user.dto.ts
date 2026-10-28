@@ -5,7 +5,9 @@ import { CreateUserDto } from './create-user.dto';
 import { UserStatus } from '../../../generated/prisma/client';
 
 // Senha NÃO é editável aqui: use PATCH /users/:id/password (UC002)
-export class UpdateUserDto extends OmitType(PartialType(CreateUserDto), ['password'] as const) {
+export class UpdateUserDto extends OmitType(PartialType(CreateUserDto), [
+  'password',
+] as const) {
   @ApiPropertyOptional({ enum: UserStatus, description: 'ACTIVE | INACTIVE' })
   @IsOptional()
   @IsEnum(UserStatus)

@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Req, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ParseIntPipe,
+  Req,
+  Query,
+} from '@nestjs/common';
 import type { RequestWithUser } from '../common/interfaces/request-with-user.interface';
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
@@ -18,27 +29,46 @@ export class AnnouncementsController {
   @Auditable('Announcement')
   @Roles('Admin Geral', 'Secretaria')
   @Post()
-  create(@Body() createAnnouncementDto: CreateAnnouncementDto, @Req() req: RequestWithUser) {
-    return this.announcementsService.create(createAnnouncementDto, req.user.userId);
+  create(
+    @Body() createAnnouncementDto: CreateAnnouncementDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.announcementsService.create(
+      createAnnouncementDto,
+      req.user.userId,
+    );
   }
 
-  // Pública - só PUBLISHED (site institucional)
+  // ---- Rotas estáticas ANTES de ':id' (senão viram id) ----
+
+  // Admin: todos os status, filtro opcional ?status=DRAFT|PUBLISHED
+  // (antes era /draft, nome enganoso)
+  @Roles('Admin Geral', 'Secretaria')
+  @Get('admin')
+  findAllAdmin(@Query() query: AdminAnnouncementQueryDto) {
+    return this.announcementsService.findAllAdmin(query);
+  }
+
+  @Roles('Admin Geral', 'Secretaria')
+  @Get('admin/stats')
+  getStats() {
+    return this.announcementsService.getStats();
+  }
+
+  // Pública - detalhe por slug (UC026, RNF014)
+  @Public()
+  @Get('slug/:slug')
+  findBySlug(@Param('slug') slug: string) {
+    return this.announcementsService.findBySlug(slug);
+  }
+
+  // Pública - só PUBLISHED
   @Public()
   @Get()
   findAll(@Query() query: PaginationQueryDto) {
     return this.announcementsService.findAll(query);
   }
 
-  // Admin - todos os status, inclusive RASCUNHO (UC024/025), paginado,
-  // com filtro opcional por status (?status=DRAFT / ?status=PUBLISHED)
-  // IMPORTANTE: precisa vir ANTES de ':id' pra não ser capturada como id
-  @Roles('Admin Geral', 'Secretaria')
-  @Get('draft')
-  findAllAdmin(@Query() query: AdminAnnouncementQueryDto) {
-    return this.announcementsService.findAllAdmin(query);
-  }
-
-  // Pública - só retorna se PUBLISHED (404 se for rascunho, não vaza)
   @Public()
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -48,7 +78,10 @@ export class AnnouncementsController {
   @Auditable('Announcement')
   @Roles('Admin Geral', 'Secretaria')
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() updateAnnouncementDto: UpdateAnnouncementDto) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateAnnouncementDto: UpdateAnnouncementDto,
+  ) {
     return this.announcementsService.update(id, updateAnnouncementDto);
   }
 

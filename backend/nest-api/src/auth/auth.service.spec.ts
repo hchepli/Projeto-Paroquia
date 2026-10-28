@@ -42,7 +42,10 @@ describe('AuthService', () => {
   it('retorna o usuário (sem passwordHash) quando a senha está correta', async () => {
     jest.spyOn(usersService, 'findByEmail').mockResolvedValue(baseUser as any);
 
-    const result = await authService.validateUser('auth@teste.com', 'senha12345');
+    const result = await authService.validateUser(
+      'auth@teste.com',
+      'senha12345',
+    );
 
     expect(result).not.toBeNull();
     expect(result).not.toHaveProperty('passwordHash');
@@ -51,12 +54,16 @@ describe('AuthService', () => {
 
   it('retorna null quando a senha está errada', async () => {
     jest.spyOn(usersService, 'findByEmail').mockResolvedValue(baseUser as any);
-    expect(await authService.validateUser('auth@teste.com', 'senhaErrada')).toBeNull();
+    expect(
+      await authService.validateUser('auth@teste.com', 'senhaErrada'),
+    ).toBeNull();
   });
 
   it('retorna null quando o email não existe', async () => {
     jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
-    expect(await authService.validateUser('naoexiste@teste.com', 'qualquer')).toBeNull();
+    expect(
+      await authService.validateUser('naoexiste@teste.com', 'qualquer'),
+    ).toBeNull();
   });
 
   it('usuário INACTIVE com senha correta lança mensagem específica (UC007 3b)', async () => {
@@ -77,11 +84,16 @@ describe('AuthService', () => {
       .spyOn(usersService, 'findByEmail')
       .mockResolvedValue({ ...baseUser, status: 'INACTIVE' } as any);
 
-    expect(await authService.validateUser('auth@teste.com', 'errada')).toBeNull();
+    expect(
+      await authService.validateUser('auth@teste.com', 'errada'),
+    ).toBeNull();
   });
 
   it('login assina só sub/email e devolve expires_in', () => {
-    const result = authService.login({ id: baseUser.id, email: baseUser.email });
+    const result = authService.login({
+      id: baseUser.id,
+      email: baseUser.email,
+    });
 
     expect(jwtService.sign).toHaveBeenCalledWith({
       sub: baseUser.id,

@@ -1,5 +1,17 @@
 // src/roles/roles.controller.ts
-import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseBoolPipe, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  DefaultValuePipe,
+  Delete,
+  Get,
+  Param,
+  ParseBoolPipe,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
@@ -33,11 +45,17 @@ export class RolesController {
     return this.rolesService.update(id, dto);
   }
 
-  @ApiQuery({ name: 'confirmBase', required: false, type: Boolean, description: 'Confirmação extra para remover cargo base (UC006)' })
+  @ApiQuery({
+    name: 'confirmBase',
+    required: false,
+    type: Boolean,
+    description: 'Confirmação extra para remover cargo base (UC006)',
+  })
   @Delete(':id')
   remove(
     @Param('id', ParseIntPipe) id: number,
-    @Query('confirmBase', new DefaultValuePipe(false), ParseBoolPipe) confirmBase: boolean,
+    @Query('confirmBase', new DefaultValuePipe(false), ParseBoolPipe)
+    confirmBase: boolean,
   ) {
     return this.rolesService.remove(id, confirmBase);
   }

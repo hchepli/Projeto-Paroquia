@@ -14,12 +14,12 @@ export class CalendarService {
     private readonly massTemplatesService: MassTemplatesService,
   ) {}
 
-async findAll(query: CalendarQueryDto): Promise<CalendarItemDto[]> {
-  const start = new Date(query.start);
-  const end = new Date(query.end);
-  assertValidRange(start, end, MAX_RANGE_DAYS); // 400 se invertido ou > 366 dias
+  async findAll(query: CalendarQueryDto): Promise<CalendarItemDto[]> {
+    const start = new Date(query.start);
+    const end = new Date(query.end);
+    assertValidRange(start, end, MAX_RANGE_DAYS); // 400 se invertido ou > 366 dias
 
-  await this.massTemplatesService.ensureGenerated(end); 
+    await this.massTemplatesService.ensureGenerated(end);
 
     const [masses, events] = await Promise.all([
       this.prismaService.mass.findMany({

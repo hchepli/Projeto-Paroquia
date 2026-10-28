@@ -45,13 +45,17 @@ export class R2StorageProvider implements StorageProvider {
       );
     }
     const key = url.slice(prefix.length);
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
   }
 
   private requireEnv(name: string): string {
     const value = process.env[name];
     if (!value) {
-      throw new Error(`Variável de ambiente ausente: ${name} (necessária para STORAGE_PROVIDER=r2)`);
+      throw new Error(
+        `Variável de ambiente ausente: ${name} (necessária para STORAGE_PROVIDER=r2)`,
+      );
     }
     return value;
   }

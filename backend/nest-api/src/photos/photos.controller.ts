@@ -72,13 +72,18 @@ export class PhotosController {
     if (!file) {
       throw new BadRequestException('Arquivo (file) é obrigatório.');
     }
-    return this.photosService.create({ albumId, isCover: isCover === 'true' }, file);
+    return this.photosService.create(
+      { albumId, isCover: isCover === 'true' },
+      file,
+    );
   }
 
   @Public()
   @Get()
   @ApiQuery({ name: 'albumId', required: false, type: Number })
-  findAll(@Query('albumId', new ParseIntPipe({ optional: true })) albumId?: number) {
+  findAll(
+    @Query('albumId', new ParseIntPipe({ optional: true })) albumId?: number,
+  ) {
     return this.photosService.findAll(albumId);
   }
 

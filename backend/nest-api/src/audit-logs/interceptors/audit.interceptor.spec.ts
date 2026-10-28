@@ -21,24 +21,38 @@ describe('AuditInterceptor', () => {
   beforeEach(() => {
     reflector = new Reflector();
     auditLogs = { create: jest.fn().mockResolvedValue(undefined) };
-    prisma = { user: { findUnique: jest.fn() }, role: { findUnique: jest.fn() } };
+    prisma = {
+      user: { findUnique: jest.fn() },
+      role: { findUnique: jest.fn() },
+    };
     interceptor = new AuditInterceptor(reflector, auditLogs as any, prisma);
     jest.spyOn(interceptor['logger'], 'error').mockImplementation();
   });
 
-  const setEntity = (name: string | undefined) => jest.spyOn(reflector, 'get').mockReturnValue(name);
+  const setEntity = (name: string | undefined) =>
+    jest.spyOn(reflector, 'get').mockReturnValue(name);
   const handler = (value: any): CallHandler => ({ handle: () => of(value) });
 
   it('ignora rota sem @Auditable', async () => {
     setEntity(undefined);
-    await lastValueFrom(await interceptor.intercept(makeContext({ method: 'POST', user: { userId: 'u' } }), handler({ id: 1 })));
+    await lastValueFrom(
+      await interceptor.intercept(
+        makeContext({ method: 'POST', user: { userId: 'u' } }),
+        handler({ id: 1 }),
+      ),
+    );
     await flush();
     expect(auditLogs.create).not.toHaveBeenCalled();
   });
 
   it('não loga sem usuário autenticado', async () => {
     setEntity('User');
-    await lastValueFrom(await interceptor.intercept(makeContext({ method: 'POST', params: {} }), handler({ id: 'x' })));
+    await lastValueFrom(
+      await interceptor.intercept(
+        makeContext({ method: 'POST', params: {} }),
+        handler({ id: 'x' }),
+      ),
+    );
     await flush();
     expect(auditLogs.create).not.toHaveBeenCalled();
   });
@@ -47,19 +61,45 @@ describe('AuditInterceptor', () => {
     setEntity('User');
     const req = { method: 'POST', user: { userId: 'admin' }, params: {} };
     await lastValueFrom(
-      await interceptor.intercept(makeContext(req), handler({ id: 'u1', name: 'A', passwordHash: 'SEGREDO', role: { name: 'X' } })),
+      await interceptor.intercept(
+        makeContext(req),
+        handler({
+          id: 'u1',
+          name: 'A',
+          passwordHash: 'SEGREDO',
+          role: { name: 'X' },
+        }),
+      ),
     );
     await flush();
     const arg = auditLogs.create.mock.calls[0][0];
-    expect(arg).toMatchObject({ userId: 'admin', action: 'CREATE', entity: 'User', entityId: 'u1' });
+    expect(arg).toMatchObject({
+      userId: 'admin',
+      action: 'CREATE',
+      entity: 'User',
+      entityId: 'u1',
+    });
     expect(JSON.stringify(arg)).not.toContain('SEGREDO');
   });
 
   it('UPDATE: busca o registro antes e remove o hash dos dados anteriores', async () => {
     setEntity('User');
-    prisma.user.findUnique.mockResolvedValue({ id: 'u1', name: 'Antigo', passwordHash: 'SEGREDO' });
-    const req = { method: 'PATCH', user: { userId: 'admin' }, params: { id: 'u1' } };
-    await lastValueFrom(await interceptor.intercept(makeContext(req), handler({ id: 'u1', name: 'Novo' })));
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      name: 'Antigo',
+      passwordHash: 'SEGREDO',
+    });
+    const req = {
+      method: 'PATCH',
+      user: { userId: 'admin' },
+      params: { id: 'u1' },
+    };
+    await lastValueFrom(
+      await interceptor.intercept(
+        makeContext(req),
+        handler({ id: 'u1', name: 'Novo' }),
+      ),
+    );
     await flush();
     const arg = auditLogs.create.mock.calls[0][0];
     expect(arg.action).toBe('UPDATE');
@@ -70,16 +110,28 @@ describe('AuditInterceptor', () => {
   it('converte id numérico da URL para number ao buscar o registro anterior (models Int)', async () => {
     setEntity('Role');
     prisma.role.findUnique.mockResolvedValue({ id: 5 });
-    const req = { method: 'PATCH', user: { userId: 'admin' }, params: { id: '5' } };
-    await lastValueFrom(await interceptor.intercept(makeContext(req), handler({ id: 5 })));
+    const req = {
+      method: 'PATCH',
+      user: { userId: 'admin' },
+      params: { id: '5' },
+    };
+    await lastValueFrom(
+      await interceptor.intercept(makeContext(req), handler({ id: 5 })),
+    );
     expect(prisma.role.findUnique).toHaveBeenCalledWith({ where: { id: 5 } });
   });
 
   it('DELETE: sem dados novos', async () => {
     setEntity('User');
     prisma.user.findUnique.mockResolvedValue({ id: 'u1', name: 'X' });
-    const req = { method: 'DELETE', user: { userId: 'admin' }, params: { id: 'u1' } };
-    await lastValueFrom(await interceptor.intercept(makeContext(req), handler({ id: 'u1' })));
+    const req = {
+      method: 'DELETE',
+      user: { userId: 'admin' },
+      params: { id: 'u1' },
+    };
+    await lastValueFrom(
+      await interceptor.intercept(makeContext(req), handler({ id: 'u1' })),
+    );
     await flush();
     const arg = auditLogs.create.mock.calls[0][0];
     expect(arg.action).toBe('DELETE');
@@ -90,7 +142,9 @@ describe('AuditInterceptor', () => {
     setEntity('User');
     auditLogs.create.mockRejectedValue(new Error('banco caiu'));
     const req = { method: 'POST', user: { userId: 'admin' }, params: {} };
-    const result = await lastValueFrom(await interceptor.intercept(makeContext(req), handler({ id: 'u1' })));
+    const result = await lastValueFrom(
+      await interceptor.intercept(makeContext(req), handler({ id: 'u1' })),
+    );
     await flush();
     expect(result).toEqual({ id: 'u1' });
     expect(interceptor['logger'].error).toHaveBeenCalled();
@@ -99,8 +153,14 @@ describe('AuditInterceptor', () => {
   it('falha ao buscar o registro anterior não impede a request', async () => {
     setEntity('User');
     prisma.user.findUnique.mockRejectedValue(new Error('x'));
-    const req = { method: 'PATCH', user: { userId: 'admin' }, params: { id: 'u1' } };
-    const result = await lastValueFrom(await interceptor.intercept(makeContext(req), handler({ id: 'u1' })));
+    const req = {
+      method: 'PATCH',
+      user: { userId: 'admin' },
+      params: { id: 'u1' },
+    };
+    const result = await lastValueFrom(
+      await interceptor.intercept(makeContext(req), handler({ id: 'u1' })),
+    );
     expect(result).toEqual({ id: 'u1' });
   });
 });

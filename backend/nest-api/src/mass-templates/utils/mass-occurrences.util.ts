@@ -1,5 +1,9 @@
 // src/mass-templates/mass-occurrences.util.ts
-import { getZonedParts, zonedTimeToUtc, TEMPLATE_TIMEZONE } from '../../common/utils/timezone.util';
+import {
+  getZonedParts,
+  zonedTimeToUtc,
+  TEMPLATE_TIMEZONE,
+} from '../../common/utils/timezone.util';
 
 /**
  * Ocorrências [from, to] de um template, calculadas em America/Sao_Paulo
@@ -16,12 +20,19 @@ export function computeOccurrences(
 
   // Calendário local representado como UTC-meia-noite, só para somar dias.
   const cursor = new Date(Date.UTC(local.year, local.month - 1, local.day));
-  cursor.setUTCDate(cursor.getUTCDate() + ((template.dayOfWeek - cursor.getUTCDay() + 7) % 7));
+  cursor.setUTCDate(
+    cursor.getUTCDate() + ((template.dayOfWeek - cursor.getUTCDay() + 7) % 7),
+  );
 
   const occurrences: Date[] = [];
   for (;;) {
     const occurrence = zonedTimeToUtc(
-      cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, cursor.getUTCDate(), hours, minutes, tz,
+      cursor.getUTCFullYear(),
+      cursor.getUTCMonth() + 1,
+      cursor.getUTCDate(),
+      hours,
+      minutes,
+      tz,
     );
     if (occurrence > to) break;
     if (occurrence >= from) occurrences.push(occurrence);

@@ -9,7 +9,11 @@ export class CreateNestedScheduleAssignmentDto {
   @Min(1)
   volunteerId!: number;
 
-  @ApiProperty({ example: 'leitor', description: 'Função (texto livre; normalizada para minúsculas/sem espaços extras).' })
+  @ApiProperty({
+    example: 'leitor',
+    description:
+      'Função (texto livre; normalizada para minúsculas/sem espaços extras).',
+  })
   @NormalizeRole()
   @IsString()
   @IsNotEmpty()

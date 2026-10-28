@@ -7,7 +7,8 @@ import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 // pois são gerados pelo banco/Prisma.
 export class CreateRoleDto {
   @ApiProperty({
-    description: 'Nome do cargo (ex: Admin Geral, Secretaria, Coordenador de Pastoral)',
+    description:
+      'Nome do cargo (ex: Admin Geral, Secretaria, Coordenador de Pastoral)',
     example: 'Secretaria',
     maxLength: 60,
   })
@@ -18,7 +19,8 @@ export class CreateRoleDto {
 
   @ApiPropertyOptional({
     description: 'Descrição livre sobre o cargo e suas responsabilidades',
-    example: 'Gestão de comunicados, eventos, missas, calendário, sacramentos e galeria.',
+    example:
+      'Gestão de comunicados, eventos, missas, calendário, sacramentos e galeria.',
     maxLength: 255,
   })
   @IsOptional()

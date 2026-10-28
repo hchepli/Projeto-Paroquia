@@ -15,7 +15,10 @@ export function normalizeContact(raw: string): string {
   if (!PHONE_CHARS.test(value)) return value;
 
   const digits = value.replace(/\D/g, '');
-  if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+  if (
+    (digits.length === 12 || digits.length === 13) &&
+    digits.startsWith('55')
+  ) {
     return digits.slice(2);
   }
   return digits;

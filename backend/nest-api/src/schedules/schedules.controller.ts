@@ -1,4 +1,15 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { SchedulesService } from './schedules.service';
@@ -37,21 +48,36 @@ export class SchedulesController {
   }
 
   @Get('report/export')
-  async exportReport(@CurrentUser() user: AuthUser, @Query() query: ScheduleQueryDto, @Res() res: Response) {
+  async exportReport(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ScheduleQueryDto,
+    @Res() res: Response,
+  ) {
     if (query.format !== 'csv' && query.format !== 'pdf') {
-      throw new BadRequestException('Formato inválido. Apenas "csv" ou "pdf" são aceitos.');
+      throw new BadRequestException(
+        'Formato inválido. Apenas "csv" ou "pdf" são aceitos.',
+      );
     }
     const schedules = await this.schedulesService.findAllForExport(user, query);
 
     if (query.format === 'csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="relatorio-escalas.csv"');
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="relatorio-escalas.csv"',
+      );
       return res.send(buildSchedulesCsv(schedules));
     }
 
-    const doc = buildSchedulesPdf(schedules, { startDate: query.startDate, endDate: query.endDate });
+    const doc = buildSchedulesPdf(schedules, {
+      startDate: query.startDate,
+      endDate: query.endDate,
+    });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="relatorio-escalas.pdf"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="relatorio-escalas.pdf"',
+    );
     doc.pipe(res);
     doc.end();
   }
@@ -63,12 +89,18 @@ export class SchedulesController {
   }
 
   @Get('coverage')
-  findCoverage(@Query() query: CoverageQueryDto, @CurrentUser() user: AuthUser) {
+  findCoverage(
+    @Query() query: CoverageQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.schedulesService.findCoverage(query, user);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.schedulesService.findOne(id, user);
   }
 
@@ -76,7 +108,10 @@ export class SchedulesController {
 
   @Auditable('Schedule')
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.schedulesService.remove(id, user);
   }
 }

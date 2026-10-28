@@ -1,11 +1,25 @@
 // src/events/events.controller.ts
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { LinkPastoralGroupsDto } from './dto/link-pastoral-groups.dto';
-import { FindAdminEventsQueryDto, FindEventsQueryDto } from './dto/find-events-query.dto';
+import {
+  FindAdminEventsQueryDto,
+  FindEventsQueryDto,
+} from './dto/find-events-query.dto';
 import { RemoveEventQueryDto } from './dto/remove-event-query.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -39,13 +53,19 @@ export class EventsController {
   // Rotas fixas ('admin', 'slug/...') SEMPRE antes de ':id'.
   @Roles(...READ_ROLES)
   @Get('admin')
-  findAllAdmin(@Query() query: FindAdminEventsQueryDto, @Req() req: { user?: { roleName?: string } }) {
+  findAllAdmin(
+    @Query() query: FindAdminEventsQueryDto,
+    @Req() req: { user?: { roleName?: string } },
+  ) {
     return this.eventsService.findAllAdmin(query, canSeeAttendance(req.user));
   }
 
   @Roles(...READ_ROLES)
   @Get('admin/:id')
-  findOneAdmin(@Param('id', ParseIntPipe) id: number, @Req() req: { user?: { roleName?: string } }) {
+  findOneAdmin(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: { user?: { roleName?: string } },
+  ) {
     return this.eventsService.findOneAdmin(id, canSeeAttendance(req.user));
   }
 
@@ -69,14 +89,20 @@ export class EventsController {
 
   @Auditable('Event')
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number, @Query() query: RemoveEventQueryDto) {
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: RemoveEventQueryDto,
+  ) {
     return this.eventsService.remove(id, query.confirm ?? false);
   }
 
   /** @deprecated Use PATCH /events/:id com pastoralGroupIds. Sai junto com a migração Modais → Páginas (Bloco 9). */
   @Auditable('Event', { action: 'UPDATE' })
   @Post(':id/pastoral-groups')
-  linkPastoralGroups(@Param('id', ParseIntPipe) id: number, @Body() dto: LinkPastoralGroupsDto) {
+  linkPastoralGroups(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: LinkPastoralGroupsDto,
+  ) {
     return this.eventsService.linkPastoralGroups(id, dto);
   }
 }

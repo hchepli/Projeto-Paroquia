@@ -25,7 +25,10 @@ export class CloudinaryStorageProvider implements StorageProvider {
         },
         (error, result) => {
           if (error || !result) {
-            return reject(error ?? new Error('Upload para o Cloudinary falhou sem detalhes.'));
+            return reject(
+              error ??
+                new Error('Upload para o Cloudinary falhou sem detalhes.'),
+            );
           }
           resolve(result.secure_url);
         },
@@ -47,7 +50,9 @@ export class CloudinaryStorageProvider implements StorageProvider {
   private extractPublicId(url: string): string {
     const match = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-zA-Z0-9]+$/);
     if (!match) {
-      throw new Error(`Não foi possível extrair o public_id da URL do Cloudinary: "${url}"`);
+      throw new Error(
+        `Não foi possível extrair o public_id da URL do Cloudinary: "${url}"`,
+      );
     }
     return match[1];
   }
@@ -55,7 +60,9 @@ export class CloudinaryStorageProvider implements StorageProvider {
   private requireEnv(name: string): string {
     const value = process.env[name];
     if (!value) {
-      throw new Error(`Variável de ambiente ausente: ${name} (necessária para STORAGE_PROVIDER=cloudinary)`);
+      throw new Error(
+        `Variável de ambiente ausente: ${name} (necessária para STORAGE_PROVIDER=cloudinary)`,
+      );
     }
     return value;
   }

@@ -6,7 +6,9 @@ import { Prisma } from '../../../generated/prisma/client';
 const makeHost = () => {
   const json = jest.fn();
   const status = jest.fn().mockReturnValue({ json });
-  const host = { switchToHttp: () => ({ getResponse: () => ({ status }) }) } as unknown as ArgumentsHost;
+  const host = {
+    switchToHttp: () => ({ getResponse: () => ({ status }) }),
+  } as unknown as ArgumentsHost;
   return { host, status, json };
 };
 
@@ -24,7 +26,9 @@ describe('PrismaExceptionFilter', () => {
     const { host, status, json } = makeHost();
     filter.catch(prismaError(code), host);
     expect(status).toHaveBeenCalledWith(expected);
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: expected }));
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: expected }),
+    );
   });
 
   it('código não mapeado vira 500 sem vazar detalhes', () => {

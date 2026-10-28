@@ -20,11 +20,17 @@ describe('contact.util', () => {
   });
 
   describe('isValidContact', () => {
-    it.each([['a@b.com'], ['47999990000'], ['4733334444']])('aceita %s', (v) => {
-      expect(isValidContact(v)).toBe(true);
-    });
-    it.each([['abc'], ['123'], ['479999900001234'], ['a@'], ['']])('recusa "%s"', (v) => {
-      expect(isValidContact(v)).toBe(false);
-    });
+    it.each([['a@b.com'], ['47999990000'], ['4733334444']])(
+      'aceita %s',
+      (v) => {
+        expect(isValidContact(v)).toBe(true);
+      },
+    );
+    it.each([['abc'], ['123'], ['479999900001234'], ['a@'], ['']])(
+      'recusa "%s"',
+      (v) => {
+        expect(isValidContact(v)).toBe(false);
+      },
+    );
   });
 });

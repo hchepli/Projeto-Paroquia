@@ -1,5 +1,10 @@
 // src/volunteers/volunteers.service.ts
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
@@ -22,7 +27,9 @@ export class VolunteersService {
 
   // null === null NÃO pode liberar acesso: Coordenador sem pastoral não é dono de nada.
   private ownsPastoral(user: AuthUser, pastoralGroupId: number) {
-    return user.pastoralGroupId != null && user.pastoralGroupId === pastoralGroupId;
+    return (
+      user.pastoralGroupId != null && user.pastoralGroupId === pastoralGroupId
+    );
   }
 
   private async assertPastoralExists(id: number) {
@@ -52,9 +59,13 @@ export class VolunteersService {
     const now = new Date();
     return rows
       .map((r) => {
-        const date = r.schedule.mass?.dateTime ?? r.schedule.event?.startDate ?? null;
+        const date =
+          r.schedule.mass?.dateTime ?? r.schedule.event?.startDate ?? null;
         const end =
-          r.schedule.mass?.dateTime ?? r.schedule.event?.endDate ?? r.schedule.event?.startDate ?? null;
+          r.schedule.mass?.dateTime ??
+          r.schedule.event?.endDate ??
+          r.schedule.event?.startDate ??
+          null;
         return {
           scheduleId: r.schedule.id,
           sourceType: r.schedule.mass ? ('MASS' as const) : ('EVENT' as const),
@@ -68,7 +79,10 @@ export class VolunteersService {
   }
 
   async create(dto: CreateVolunteerDto, user: AuthUser) {
-    if (this.isCoordinator(user) && !this.ownsPastoral(user, dto.pastoralGroupId)) {
+    if (
+      this.isCoordinator(user) &&
+      !this.ownsPastoral(user, dto.pastoralGroupId)
+    ) {
       throw new ForbiddenException(
         'Você só pode cadastrar Voluntários para a sua própria Pastoral (RN006).',
       );
@@ -105,7 +119,10 @@ export class VolunteersService {
     });
     if (!volunteer) throw new NotFoundException('Voluntário não encontrado');
 
-    if (this.isCoordinator(user) && !this.ownsPastoral(user, volunteer.pastoralGroupId)) {
+    if (
+      this.isCoordinator(user) &&
+      !this.ownsPastoral(user, volunteer.pastoralGroupId)
+    ) {
       throw new ForbiddenException('Você não tem acesso a este Voluntário.');
     }
     return volunteer;
@@ -116,17 +133,22 @@ export class VolunteersService {
     const { pastoralGroupId, ...rest } = dto;
 
     const moveTo =
-      pastoralGroupId !== undefined && pastoralGroupId !== current.pastoralGroupId
+      pastoralGroupId !== undefined &&
+      pastoralGroupId !== current.pastoralGroupId
         ? pastoralGroupId
         : undefined;
 
     if (moveTo !== undefined) {
       if (this.isCoordinator(user)) {
-        throw new ForbiddenException('Você não pode mover um Voluntário para outra Pastoral (RN006).');
+        throw new ForbiddenException(
+          'Você não pode mover um Voluntário para outra Pastoral (RN006).',
+        );
       }
       await this.assertPastoralExists(moveTo);
 
-      const upcoming = (await this.findAssignments(id)).filter((a) => a.isFuture);
+      const upcoming = (await this.findAssignments(id)).filter(
+        (a) => a.isFuture,
+      );
       if (upcoming.length > 0) {
         throw new ConflictException({
           statusCode: 409,
@@ -141,7 +163,9 @@ export class VolunteersService {
       where: { id },
       data: {
         ...rest,
-        ...(moveTo !== undefined && { pastoralGroup: { connect: { id: moveTo } } }),
+        ...(moveTo !== undefined && {
+          pastoralGroup: { connect: { id: moveTo } },
+        }),
       },
       include: volunteerInclude,
     });

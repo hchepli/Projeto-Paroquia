@@ -28,7 +28,13 @@ const a = await Promise.all(Array.from({ length: N }, mk));
 const ta = tally(a);
 check('(a) criação paralela da mesma escala', ta[201] === 1 && ta[409] === N - 1, ta);
 const scheduleId = a.find((r) => r.status === 201)?.body?.id;
-if (!scheduleId) process.exit(1);
+if (!scheduleId) {
+  console.log('Mensagem do 1º erro:', JSON.stringify(a[0].body));
+  console.log('Se for "já possui escala": apague a escala antiga (DELETE FROM escalas WHERE missa_id = <MASS_ID> AND pastoral_id = <PASTORAL_ID>;) ou use outra Missa.');
+  process.exitCode = 1; // sem process.exit(): evita o crash do libuv no Windows
+  await new Promise((r) => setTimeout(r, 100));
+  throw new Error('cenário inválido');
+}
 
 // (c) mesma atribuição em paralelo -> 1x 201 e o resto 409 (UNIQUE case-insensitive via normalização)
 const roles = ['Coroinha', 'coroinha', ' COROINHA ', 'coroinha'];
@@ -46,4 +52,4 @@ check('(d) remoção x edição sem 500', !d.some((r) => r.status >= 500), td);
 const after = await call('GET', `/schedules/${scheduleId}`);
 check('(d) escala realmente removida', after.status === 404, after.status);
 
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

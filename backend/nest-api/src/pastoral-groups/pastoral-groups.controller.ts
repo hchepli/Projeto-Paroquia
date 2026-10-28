@@ -1,5 +1,14 @@
 // src/pastoral-groups/pastoral-groups.controller.ts
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { PastoralGroupsService } from './pastoral-groups.service';
 import { CreatePastoralGroupDto } from './dto/create-pastoral-group.dto';

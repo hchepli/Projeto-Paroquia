@@ -78,4 +78,4 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter'
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

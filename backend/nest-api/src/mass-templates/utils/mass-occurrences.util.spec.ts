@@ -10,7 +10,10 @@ describe('computeOccurrences', () => {
       new Date('2026-10-14T12:00:00Z'),
       new Date('2026-11-02T00:00:00Z'),
     );
-    expect(iso(r)).toEqual(['2026-10-19T22:00:00.000Z', '2026-10-26T22:00:00.000Z']);
+    expect(iso(r)).toEqual([
+      '2026-10-19T22:00:00.000Z',
+      '2026-10-26T22:00:00.000Z',
+    ]);
   });
 
   it('usa o dia da semana LOCAL (domingo 23:30 BRT já é segunda em UTC)', () => {

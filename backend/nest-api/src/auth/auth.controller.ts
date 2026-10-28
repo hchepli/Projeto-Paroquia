@@ -8,7 +8,10 @@ import { LoginBodyGuard } from './guards/login-body.guard';
 import { LoginThrottlerGuard } from './guards/login-throttler.guard';
 import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
-import type { AuthenticatedRequest, LoginRequest } from './types/authenticated-request';
+import type {
+  AuthenticatedRequest,
+  LoginRequest,
+} from './types/authenticated-request';
 
 @Controller('auth')
 export class AuthController {

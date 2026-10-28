@@ -1,12 +1,18 @@
 // src/roles/roles.service.ts
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { Prisma } from '../../generated/prisma/client';
 
 // _count de usuários: o front usa para avisar antes de remover (UC006)
-const WITH_USER_COUNT = { _count: { select: { users: true } } } satisfies Prisma.RoleInclude;
+const WITH_USER_COUNT = {
+  _count: { select: { users: true } },
+} satisfies Prisma.RoleInclude;
 
 @Injectable()
 export class RolesService {
@@ -15,18 +21,27 @@ export class RolesService {
   async create(dto: CreateRoleDto) {
     try {
       // isBase nunca vem do body: cargo criado via CRUD é sempre não-base
-      return await this.prisma.role.create({ data: dto, include: WITH_USER_COUNT });
+      return await this.prisma.role.create({
+        data: dto,
+        include: WITH_USER_COUNT,
+      });
     } catch (error) {
       this.rethrowKnown(error);
     }
   }
 
   findAll() {
-    return this.prisma.role.findMany({ include: WITH_USER_COUNT, orderBy: { id: 'asc' } });
+    return this.prisma.role.findMany({
+      include: WITH_USER_COUNT,
+      orderBy: { id: 'asc' },
+    });
   }
 
   async findOne(id: number) {
-    const role = await this.prisma.role.findUnique({ where: { id }, include: WITH_USER_COUNT });
+    const role = await this.prisma.role.findUnique({
+      where: { id },
+      include: WITH_USER_COUNT,
+    });
     if (!role) throw new NotFoundException(`Cargo com id ${id} não encontrado`);
     return role;
   }
@@ -40,7 +55,11 @@ export class RolesService {
     }
 
     try {
-      return await this.prisma.role.update({ where: { id }, data: dto, include: WITH_USER_COUNT });
+      return await this.prisma.role.update({
+        where: { id },
+        data: dto,
+        include: WITH_USER_COUNT,
+      });
     } catch (error) {
       this.rethrowKnown(error);
     }
@@ -64,15 +83,23 @@ export class RolesService {
       return await this.prisma.role.delete({ where: { id } });
     } catch (error) {
       // Defesa final: um usuário foi vinculado entre a checagem e o delete (FK Restrict)
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-        throw new ConflictException('Não é possível remover: há usuários vinculados a este cargo.');
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'Não é possível remover: há usuários vinculados a este cargo.',
+        );
       }
       throw error;
     }
   }
 
   private rethrowKnown(error: unknown): never {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
       throw new ConflictException('Já existe um cargo com esse nome');
     }
     throw error;

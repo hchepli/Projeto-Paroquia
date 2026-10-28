@@ -4,7 +4,10 @@ import { IsIn, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { DateRangeQueryDto } from '../../common/dto/date-range-query.dto';
 
-export class MassQueryDto extends IntersectionType(PaginationQueryDto, DateRangeQueryDto) {
+export class MassQueryDto extends IntersectionType(
+  PaginationQueryDto,
+  DateRangeQueryDto,
+) {
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'asc' })
   @IsOptional()
   @IsIn(['asc', 'desc'])

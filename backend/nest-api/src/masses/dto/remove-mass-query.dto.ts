@@ -4,7 +4,9 @@ import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional } from 'class-validator';
 
 export class RemoveMassQueryDto {
-  @ApiPropertyOptional({ description: 'Confirma a exclusão em cascata das Escalas (RN016)' })
+  @ApiPropertyOptional({
+    description: 'Confirma a exclusão em cascata das Escalas (RN016)',
+  })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()

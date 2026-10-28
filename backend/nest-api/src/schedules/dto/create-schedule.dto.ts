@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsInt,
+  IsOptional,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateNestedScheduleAssignmentDto } from '../../schedule-assignment/dto/create-nested-schedule-assignment.dto';
 
@@ -17,7 +25,10 @@ export class CreateScheduleDto {
   @Min(1)
   eventId?: number | null;
 
-  @ApiProperty({ type: [CreateNestedScheduleAssignmentDto], description: 'Pelo menos 1 atribuição.' })
+  @ApiProperty({
+    type: [CreateNestedScheduleAssignmentDto],
+    description: 'Pelo menos 1 atribuição.',
+  })
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(50)

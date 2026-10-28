@@ -1,5 +1,10 @@
 // src/masses/masses.service.ts
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { CreateMassDto } from './dto/create-mass.dto';
@@ -22,7 +27,9 @@ const MASS_LIST_SELECT = {
 
 const MASS_DETAIL_SELECT = {
   ...MASS_LIST_SELECT,
-  pastoralGroups: { select: { pastoralGroup: { select: { id: true, name: true } } } },
+  pastoralGroups: {
+    select: { pastoralGroup: { select: { id: true, name: true } } },
+  },
 } satisfies Prisma.MassSelect;
 
 @Injectable()
@@ -36,12 +43,23 @@ export class MassesService {
       if (pastoralGroupIds?.length) {
         await this.syncPastoralGroups(tx, mass.id, pastoralGroupIds);
       }
-      return tx.mass.findUniqueOrThrow({ where: { id: mass.id }, select: MASS_DETAIL_SELECT });
+      return tx.mass.findUniqueOrThrow({
+        where: { id: mass.id },
+        select: MASS_DETAIL_SELECT,
+      });
     });
   }
 
   async findAll(query: MassQueryDto) {
-    const { page = 1, limit = 10, search, sortBy, order = 'asc', startDate, endDate } = query;
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      sortBy,
+      order = 'asc',
+      startDate,
+      endDate,
+    } = query;
     const dateRange = buildDateRangeFilter(startDate, endDate);
 
     const where: Prisma.MassWhereInput = {
@@ -50,13 +68,18 @@ export class MassesService {
     };
 
     const allowedSortFields = ['dateTime', 'title'];
-    const orderBy: Prisma.MassOrderByWithRelationInput = allowedSortFields.includes(sortBy ?? '')
-      ? { [sortBy as string]: order }
-      : { dateTime: order };
+    const orderBy: Prisma.MassOrderByWithRelationInput =
+      allowedSortFields.includes(sortBy ?? '')
+        ? { [sortBy as string]: order }
+        : { dateTime: order };
 
     const [data, total] = await Promise.all([
       this.prismaService.mass.findMany({
-        where, orderBy, skip: (page - 1) * limit, take: limit, select: MASS_LIST_SELECT,
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        select: MASS_LIST_SELECT,
       }),
       this.prismaService.mass.count({ where }),
     ]);
@@ -68,7 +91,10 @@ export class MassesService {
   async findWithoutPastoral(query: DateRangeQueryDto) {
     const dateRange = buildDateRangeFilter(query.startDate, query.endDate);
     const data = await this.prismaService.mass.findMany({
-      where: { pastoralGroups: { none: {} }, ...(dateRange && { dateTime: dateRange }) },
+      where: {
+        pastoralGroups: { none: {} },
+        ...(dateRange && { dateTime: dateRange }),
+      },
       orderBy: { dateTime: 'asc' },
       select: MASS_LIST_SELECT,
       take: 500,
@@ -77,7 +103,10 @@ export class MassesService {
   }
 
   async findOne(id: number) {
-    const mass = await this.prismaService.mass.findUnique({ where: { id }, select: MASS_DETAIL_SELECT });
+    const mass = await this.prismaService.mass.findUnique({
+      where: { id },
+      select: MASS_DETAIL_SELECT,
+    });
     if (!mass) throw new NotFoundException('Missa não encontrada');
     return mass;
   }
@@ -91,7 +120,10 @@ export class MassesService {
       }
       // generatedFromTemplateId/templateOccurrenceAt não estão no DTO: editar dateTime é livre.
       await tx.mass.update({ where: { id }, data });
-      return tx.mass.findUniqueOrThrow({ where: { id }, select: MASS_DETAIL_SELECT });
+      return tx.mass.findUniqueOrThrow({
+        where: { id },
+        select: MASS_DETAIL_SELECT,
+      });
     });
   }
 
@@ -137,7 +169,12 @@ export class MassesService {
 
       if (mass.generatedFromTemplateId !== null && mass.templateOccurrenceAt) {
         await tx.massTemplateSkip.createMany({
-          data: [{ templateId: mass.generatedFromTemplateId, occurrenceAt: mass.templateOccurrenceAt }],
+          data: [
+            {
+              templateId: mass.generatedFromTemplateId,
+              occurrenceAt: mass.templateOccurrenceAt,
+            },
+          ],
           skipDuplicates: true,
         });
       }
@@ -161,26 +198,47 @@ export class MassesService {
       await this.syncPastoralGroups(tx, id, dto.pastoralGroupIds);
       return tx.massPastoralGroup.findMany({
         where: { massId: id },
-        select: { massId: true, pastoralGroupId: true, pastoralGroup: { select: { id: true, name: true } } },
+        select: {
+          massId: true,
+          pastoralGroupId: true,
+          pastoralGroup: { select: { id: true, name: true } },
+        },
       });
     });
   }
 
-  private async lockMass(tx: Prisma.TransactionClient, id: number): Promise<void> {
-    const rows = await tx.$queryRaw<{ id: number }[]>`SELECT id FROM "missas" WHERE id = ${id} FOR UPDATE`;
+  private async lockMass(
+    tx: Prisma.TransactionClient,
+    id: number,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<
+      { id: number }[]
+    >`SELECT id FROM "missas" WHERE id = ${id} FOR UPDATE`;
     if (rows.length === 0) throw new NotFoundException('Missa não encontrada');
   }
 
   /** Torna o conjunto de Pastorais igual a `ids`, sem tocar nas que já estão (RN017). */
-  private async syncPastoralGroups(tx: Prisma.TransactionClient, massId: number, ids: number[]) {
+  private async syncPastoralGroups(
+    tx: Prisma.TransactionClient,
+    massId: number,
+    ids: number[],
+  ) {
     const unique = [...new Set(ids)];
 
-    const found = await tx.pastoralGroup.findMany({ where: { id: { in: unique } }, select: { id: true } });
+    const found = await tx.pastoralGroup.findMany({
+      where: { id: { in: unique } },
+      select: { id: true },
+    });
     if (found.length !== unique.length) {
-      throw new BadRequestException('Uma ou mais Pastorais informadas não existem.');
+      throw new BadRequestException(
+        'Uma ou mais Pastorais informadas não existem.',
+      );
     }
 
-    const current = await tx.massPastoralGroup.findMany({ where: { massId }, select: { pastoralGroupId: true } });
+    const current = await tx.massPastoralGroup.findMany({
+      where: { massId },
+      select: { pastoralGroupId: true },
+    });
     const currentIds = current.map((c) => c.pastoralGroupId);
     const toRemove = currentIds.filter((pid) => !unique.includes(pid));
     const toAdd = unique.filter((pid) => !currentIds.includes(pid));
@@ -191,12 +249,16 @@ export class MassesService {
         select: { pastoralGroup: { select: { name: true } } },
       });
       if (blocking.length > 0) {
-        const names = blocking.map((b) => b.pastoralGroup?.name ?? '?').join(', ');
+        const names = blocking
+          .map((b) => b.pastoralGroup?.name ?? '?')
+          .join(', ');
         throw new ConflictException(
           `Não é possível desvincular: ${names} já possui(em) escala nesta missa. Remova a escala antes.`,
         );
       }
-      await tx.massPastoralGroup.deleteMany({ where: { massId, pastoralGroupId: { in: toRemove } } });
+      await tx.massPastoralGroup.deleteMany({
+        where: { massId, pastoralGroupId: { in: toRemove } },
+      });
     }
 
     if (toAdd.length > 0) {

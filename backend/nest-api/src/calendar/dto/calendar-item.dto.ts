@@ -6,7 +6,10 @@ export class CalendarItemDto {
   @ApiProperty({ description: 'ID da Mass ou Event de origem', example: 1 })
   id!: number;
 
-  @ApiProperty({ description: 'Título exibido na grade', example: 'Missa Dominical' })
+  @ApiProperty({
+    description: 'Título exibido na grade',
+    example: 'Missa Dominical',
+  })
   title!: string;
 
   @ApiProperty({
@@ -15,6 +18,10 @@ export class CalendarItemDto {
   })
   date!: string;
 
-  @ApiProperty({ description: 'Origem do item', enum: ['mass', 'event'], example: 'mass' })
+  @ApiProperty({
+    description: 'Origem do item',
+    enum: ['mass', 'event'],
+    example: 'mass',
+  })
   type!: CalendarItemType;
 }

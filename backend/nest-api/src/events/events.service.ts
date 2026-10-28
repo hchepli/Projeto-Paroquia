@@ -1,11 +1,19 @@
 // src/events/events.service.ts
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { LinkPastoralGroupsDto } from './dto/link-pastoral-groups.dto';
-import { FindAdminEventsQueryDto, FindEventsQueryDto } from './dto/find-events-query.dto';
+import {
+  FindAdminEventsQueryDto,
+  FindEventsQueryDto,
+} from './dto/find-events-query.dto';
 import { generateSlug } from '../common/utils/slug.util';
 import { assertEndNotBeforeStart } from '../common/utils/date-order.util';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
@@ -21,7 +29,9 @@ const EVENT_PUBLIC_LIST_SELECT = {
   endDate: true,
   location: true,
   category: { select: { id: true, name: true } },
-  pastoralGroups: { select: { pastoralGroup: { select: { id: true, name: true } } } },
+  pastoralGroups: {
+    select: { pastoralGroup: { select: { id: true, name: true } } },
+  },
 } satisfies Prisma.EventSelect;
 
 const EVENT_PUBLIC_DETAIL_SELECT = {
@@ -44,7 +54,10 @@ const MAX_SLUG_ATTEMPTS = 5;
 const SLUG_BASE_MAX = 170; // sobra espaço para o sufixo "-N" dentro dos 180 do banco
 
 function isUniqueViolation(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
 }
 
 @Injectable()
@@ -75,15 +88,21 @@ export class EventsService {
           if (pastoralGroupIds?.length) {
             await this.syncPastoralGroups(tx, event.id, pastoralGroupIds);
           }
-          return tx.event.findUniqueOrThrow({ where: { id: event.id }, select: EVENT_ADMIN_SELECT });
+          return tx.event.findUniqueOrThrow({
+            where: { id: event.id },
+            select: EVENT_ADMIN_SELECT,
+          });
         });
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
-        if (slug !== undefined) throw new ConflictException('Já existe um evento com este slug.');
+        if (slug !== undefined)
+          throw new ConflictException('Já existe um evento com este slug.');
         // slug automático: tenta de novo com um candidato recalculado
       }
     }
-    throw new ConflictException('Não foi possível gerar um slug único. Tente novamente.');
+    throw new ConflictException(
+      'Não foi possível gerar um slug único. Tente novamente.',
+    );
   }
 
   async update(id: number, dto: UpdateEventDto) {
@@ -99,7 +118,12 @@ export class EventsService {
           select: { startDate: true, endDate: true },
         });
         const finalStart = startDate ? new Date(startDate) : current.startDate;
-        const finalEnd = endDate === undefined ? current.endDate : endDate === null ? null : new Date(endDate);
+        const finalEnd =
+          endDate === undefined
+            ? current.endDate
+            : endDate === null
+              ? null
+              : new Date(endDate);
         assertEndNotBeforeStart(finalStart, finalEnd);
 
         await this.assertReferences(tx, rest.massId, rest.categoryId);
@@ -119,10 +143,14 @@ export class EventsService {
           },
         });
 
-        return tx.event.findUniqueOrThrow({ where: { id }, select: EVENT_ADMIN_SELECT });
+        return tx.event.findUniqueOrThrow({
+          where: { id },
+          select: EVENT_ADMIN_SELECT,
+        });
       });
     } catch (error) {
-      if (isUniqueViolation(error)) throw new ConflictException('Já existe um evento com este slug.');
+      if (isUniqueViolation(error))
+        throw new ConflictException('Já existe um evento com este slug.');
       throw error;
     }
   }
@@ -188,7 +216,11 @@ export class EventsService {
       await this.syncPastoralGroups(tx, id, dto.pastoralGroupIds);
       return tx.eventPastoralGroup.findMany({
         where: { eventId: id },
-        select: { eventId: true, pastoralGroupId: true, pastoralGroup: { select: { id: true, name: true } } },
+        select: {
+          eventId: true,
+          pastoralGroupId: true,
+          pastoralGroup: { select: { id: true, name: true } },
+        },
       });
     });
   }
@@ -196,7 +228,9 @@ export class EventsService {
   // ---------------------------------------------------------------- leitura
 
   /** Público: só ACTIVE, sem dados internos. */
-  async findAllPublic(query: FindEventsQueryDto): Promise<PaginatedResult<unknown>> {
+  async findAllPublic(
+    query: FindEventsQueryDto,
+  ): Promise<PaginatedResult<unknown>> {
     const { page = 1, limit = 10 } = query;
     const where = this.buildWhere(query, 'ACTIVE');
     const [data, total] = await Promise.all([
@@ -213,7 +247,10 @@ export class EventsService {
   }
 
   /** Admin: todos os status; contagem de confirmações só para quem pode ver (UC036). */
-  async findAllAdmin(query: FindAdminEventsQueryDto, canSeeAttendance: boolean): Promise<PaginatedResult<unknown>> {
+  async findAllAdmin(
+    query: FindAdminEventsQueryDto,
+    canSeeAttendance: boolean,
+  ): Promise<PaginatedResult<unknown>> {
     const { page = 1, limit = 10 } = query;
     const where = this.buildWhere(query, query.status);
     const [rows, total] = await Promise.all([
@@ -254,40 +291,64 @@ export class EventsService {
   }
 
   async findOneAdmin(id: number, canSeeAttendance: boolean) {
-    const event = await this.prismaService.event.findUnique({ where: { id }, select: EVENT_ADMIN_SELECT });
+    const event = await this.prismaService.event.findUnique({
+      where: { id },
+      select: EVENT_ADMIN_SELECT,
+    });
     if (!event) throw new NotFoundException('Evento não encontrado');
     return this.hideAttendance(event, canSeeAttendance);
   }
 
   // ---------------------------------------------------------------- helpers
 
-  private buildWhere(query: FindEventsQueryDto, status?: 'ACTIVE' | 'CANCELLED'): Prisma.EventWhereInput {
+  private buildWhere(
+    query: FindEventsQueryDto,
+    status?: 'ACTIVE' | 'CANCELLED',
+  ): Prisma.EventWhereInput {
     const now = new Date();
     const and: Prisma.EventWhereInput[] = [];
 
     if (status) and.push({ status });
-    if (query.search) and.push({ name: { contains: query.search, mode: 'insensitive' } });
+    if (query.search)
+      and.push({ name: { contains: query.search, mode: 'insensitive' } });
     if (query.categoryId) and.push({ categoryId: query.categoryId });
 
     // "terminou" = (endDate ?? startDate) < agora
     if (query.period === 'upcoming') {
-      and.push({ OR: [{ endDate: { gte: now } }, { endDate: null, startDate: { gte: now } }] });
+      and.push({
+        OR: [
+          { endDate: { gte: now } },
+          { endDate: null, startDate: { gte: now } },
+        ],
+      });
     } else if (query.period === 'past') {
-      and.push({ OR: [{ endDate: { lt: now } }, { endDate: null, startDate: { lt: now } }] });
+      and.push({
+        OR: [
+          { endDate: { lt: now } },
+          { endDate: null, startDate: { lt: now } },
+        ],
+      });
     }
 
     return and.length > 0 ? { AND: and } : {};
   }
 
-  private buildOrderBy(query: FindEventsQueryDto): Prisma.EventOrderByWithRelationInput {
+  private buildOrderBy(
+    query: FindEventsQueryDto,
+  ): Prisma.EventOrderByWithRelationInput {
     if (query.period === 'upcoming') return { startDate: 'asc' };
     if (query.period === 'past') return { startDate: 'desc' };
     const allowed = ['startDate', 'name'];
-    const field = allowed.includes(query.sortBy ?? '') ? (query.sortBy as string) : 'startDate';
+    const field = allowed.includes(query.sortBy ?? '')
+      ? (query.sortBy as string)
+      : 'startDate';
     return { [field]: query.order ?? 'desc' };
   }
 
-  private hideAttendance<T extends { _count: unknown }>(row: T, canSee: boolean): Omit<T, '_count'> | T {
+  private hideAttendance<T extends { _count: unknown }>(
+    row: T,
+    canSee: boolean,
+  ): Omit<T, '_count'> | T {
     if (canSee) return row;
     const { _count, ...rest } = row;
     void _count;
@@ -295,7 +356,9 @@ export class EventsService {
   }
 
   private slugBase(name: string): string {
-    return generateSlug(name).slice(0, SLUG_BASE_MAX).replace(/-+$/, '') || 'evento';
+    return (
+      generateSlug(name).slice(0, SLUG_BASE_MAX).replace(/-+$/, '') || 'evento'
+    );
   }
 
   private async nextFreeSlug(base: string): Promise<string> {
@@ -318,33 +381,59 @@ export class EventsService {
     categoryId: number | null | undefined,
   ) {
     if (massId != null) {
-      const mass = await tx.mass.findUnique({ where: { id: massId }, select: { id: true } });
+      const mass = await tx.mass.findUnique({
+        where: { id: massId },
+        select: { id: true },
+      });
       if (!mass) throw new BadRequestException('A Missa informada não existe.');
     }
     if (categoryId != null) {
-      const category = await tx.category.findUnique({ where: { id: categoryId }, select: { type: true } });
-      if (!category) throw new BadRequestException('A Categoria informada não existe.');
+      const category = await tx.category.findUnique({
+        where: { id: categoryId },
+        select: { type: true },
+      });
+      if (!category)
+        throw new BadRequestException('A Categoria informada não existe.');
       if (category.type !== 'EVENT') {
-        throw new BadRequestException('A Categoria informada não é uma categoria de eventos.');
+        throw new BadRequestException(
+          'A Categoria informada não é uma categoria de eventos.',
+        );
       }
     }
   }
 
-  private async lockEvent(tx: Prisma.TransactionClient, id: number): Promise<void> {
-    const rows = await tx.$queryRaw<{ id: number }[]>`SELECT id FROM "eventos" WHERE id = ${id} FOR UPDATE`;
+  private async lockEvent(
+    tx: Prisma.TransactionClient,
+    id: number,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<
+      { id: number }[]
+    >`SELECT id FROM "eventos" WHERE id = ${id} FOR UPDATE`;
     if (rows.length === 0) throw new NotFoundException('Evento não encontrado');
   }
 
   /** Torna o conjunto de Pastorais igual a `ids`, sem tocar nas que já estão (RN017). */
-  private async syncPastoralGroups(tx: Prisma.TransactionClient, eventId: number, ids: number[]) {
+  private async syncPastoralGroups(
+    tx: Prisma.TransactionClient,
+    eventId: number,
+    ids: number[],
+  ) {
     const unique = [...new Set(ids)];
 
-    const found = await tx.pastoralGroup.findMany({ where: { id: { in: unique } }, select: { id: true } });
+    const found = await tx.pastoralGroup.findMany({
+      where: { id: { in: unique } },
+      select: { id: true },
+    });
     if (found.length !== unique.length) {
-      throw new BadRequestException('Uma ou mais Pastorais informadas não existem.');
+      throw new BadRequestException(
+        'Uma ou mais Pastorais informadas não existem.',
+      );
     }
 
-    const current = await tx.eventPastoralGroup.findMany({ where: { eventId }, select: { pastoralGroupId: true } });
+    const current = await tx.eventPastoralGroup.findMany({
+      where: { eventId },
+      select: { pastoralGroupId: true },
+    });
     const currentIds = current.map((c) => c.pastoralGroupId);
     const toRemove = currentIds.filter((pid) => !unique.includes(pid));
     const toAdd = unique.filter((pid) => !currentIds.includes(pid));
@@ -355,12 +444,19 @@ export class EventsService {
         select: { pastoralGroup: { select: { name: true } } },
       });
       if (blocking.length > 0) {
-        const names = blocking.map((b) => b.pastoralGroup?.name ?? '?').join(', ');
-        throw new ConflictException(
-          `Não é possível desvincular: ${names} já possui(em) escala neste evento. Remova a escala antes.`,
-        );
+        const names = blocking
+          .map((b) => b.pastoralGroup?.name ?? '?')
+          .join(', ');
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'Conflict',
+          code: 'EVENT_PASTORAL_HAS_SCHEDULE',
+          message: `Não é possível desvincular: ${names} já possui(em) escala neste evento. Remova a escala antes.`,
+        });
       }
-      await tx.eventPastoralGroup.deleteMany({ where: { eventId, pastoralGroupId: { in: toRemove } } });
+      await tx.eventPastoralGroup.deleteMany({
+        where: { eventId, pastoralGroupId: { in: toRemove } },
+      });
     }
 
     if (toAdd.length > 0) {

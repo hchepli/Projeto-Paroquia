@@ -38,9 +38,12 @@ export class AttendanceConfirmationsService {
     });
     if (!event) throw new NotFoundException('Evento não encontrado.');
     if (event.status === 'CANCELLED') {
-      throw new ConflictException('Este evento foi cancelado e não recebe confirmações.');
+      throw new ConflictException(
+        'Este evento foi cancelado e não recebe confirmações.',
+      );
     }
-    const endsAt = event.endDate ?? new Date(event.startDate.getTime() + NO_END_GRACE_MS);
+    const endsAt =
+      event.endDate ?? new Date(event.startDate.getTime() + NO_END_GRACE_MS);
     if (endsAt.getTime() < Date.now()) {
       throw new UnprocessableEntityException('Este evento já foi encerrado.');
     }
@@ -59,7 +62,8 @@ export class AttendanceConfirmationsService {
         // UNIQUE (eventId, contact): repetição = mesma resposta de sucesso (não revela quem já confirmou).
         if (error.code === 'P2002') return { message: PRESENCE_MESSAGE };
         // Evento removido entre a checagem e o insert.
-        if (error.code === 'P2003') throw new NotFoundException('Evento não encontrado.');
+        if (error.code === 'P2003')
+          throw new NotFoundException('Evento não encontrado.');
       }
       throw error;
     }
@@ -97,7 +101,14 @@ export class AttendanceConfirmationsService {
       this.prismaService.attendanceConfirmation.count({ where }),
     ]);
 
-    return { event, data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      event,
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(id: string) {
@@ -105,7 +116,8 @@ export class AttendanceConfirmationsService {
       where: { id },
       select: CONFIRMATION_ADMIN_SELECT,
     });
-    if (!row) throw new NotFoundException('Confirmação de presença não encontrada.');
+    if (!row)
+      throw new NotFoundException('Confirmação de presença não encontrada.');
     return row;
   }
 

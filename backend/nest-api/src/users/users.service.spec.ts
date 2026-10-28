@@ -1,6 +1,10 @@
 // src/users/users.service.spec.ts
 import { Test } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,8 +17,14 @@ const SEC = { id: 2, name: 'Secretaria' };
 const COORD = { id: 3, name: 'Coordenador de Pastoral' };
 
 const makeUser = (o: Record<string, unknown> = {}) => ({
-  id: 'u1', name: 'Fulano', email: 'f@x.com',
-  roleId: ADMIN.id, role: ADMIN, pastoralGroupId: null, status: 'ACTIVE', ...o,
+  id: 'u1',
+  name: 'Fulano',
+  email: 'f@x.com',
+  roleId: ADMIN.id,
+  role: ADMIN,
+  pastoralGroupId: null,
+  status: 'ACTIVE',
+  ...o,
 });
 
 const prismaError = (code: string) =>
@@ -24,7 +34,14 @@ describe('UsersService', () => {
   let service: UsersService;
 
   const prismaMock: any = {
-    user: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn(), count: jest.fn() },
+    user: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      count: jest.fn(),
+    },
     role: { findUnique: jest.fn() },
     pastoralGroup: { findUnique: jest.fn() },
     $transaction: jest.fn(),
@@ -38,13 +55,21 @@ describe('UsersService', () => {
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-pw');
 
     const module = await Test.createTestingModule({
-      providers: [UsersService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        UsersService,
+        { provide: PrismaService, useValue: prismaMock },
+      ],
     }).compile();
     service = module.get(UsersService);
   });
 
   describe('create (UC001 / RN006)', () => {
-    const dto = { name: 'N', email: 'n@x.com', password: 'senha1234', roleId: SEC.id };
+    const dto = {
+      name: 'N',
+      email: 'n@x.com',
+      password: 'senha1234',
+      roleId: SEC.id,
+    };
 
     it('gera o hash, não envia a senha em texto e omite o hash na resposta', async () => {
       prismaMock.role.findUnique.mockResolvedValue(SEC);
@@ -66,18 +91,24 @@ describe('UsersService', () => {
 
     it('400 se Coordenador não tem pastoral', async () => {
       prismaMock.role.findUnique.mockResolvedValue(COORD);
-      await expect(service.create({ ...dto, roleId: COORD.id })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create({ ...dto, roleId: COORD.id }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('400 se a pastoral do Coordenador não existe', async () => {
       prismaMock.role.findUnique.mockResolvedValue(COORD);
       prismaMock.pastoralGroup.findUnique.mockResolvedValue(null);
-      await expect(service.create({ ...dto, roleId: COORD.id, pastoralGroupId: 99 })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create({ ...dto, roleId: COORD.id, pastoralGroupId: 99 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('400 se cargo diferente de Coordenador vem com pastoral', async () => {
       prismaMock.role.findUnique.mockResolvedValue(SEC);
-      await expect(service.create({ ...dto, pastoralGroupId: 1 })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create({ ...dto, pastoralGroupId: 1 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('409 se o e-mail já existe (P2002)', async () => {
@@ -90,8 +121,11 @@ describe('UsersService', () => {
   describe('findAll / findOne (UC004)', () => {
     it('aplica filtros de cargo e status', async () => {
       prismaMock.user.findMany.mockResolvedValue([]);
-      await service.findAll({ roleId: 2, status: 'ACTIVE' as any });
-      expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual({ roleId: 2, status: 'ACTIVE' });
+      await service.findAll({ roleId: 2, status: 'ACTIVE' });
+      expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual({
+        roleId: 2,
+        status: 'ACTIVE',
+      });
     });
 
     it('404 se não existe', async () => {
@@ -103,11 +137,15 @@ describe('UsersService', () => {
   describe('update (UC002 / UC003)', () => {
     it('404 se não existe', async () => {
       prismaMock.user.findUnique.mockResolvedValue(null);
-      await expect(service.update('x', { name: 'a' })).rejects.toThrow(NotFoundException);
+      await expect(service.update('x', { name: 'a' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('edição simples não abre transação nem lock', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(makeUser({ roleId: SEC.id, role: SEC }));
+      prismaMock.user.findUnique.mockResolvedValue(
+        makeUser({ roleId: SEC.id, role: SEC }),
+      );
       prismaMock.user.update.mockResolvedValue({});
       await service.update('u1', { name: 'Novo' });
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
@@ -117,7 +155,9 @@ describe('UsersService', () => {
     it('409 ao inativar o último Admin Geral ativo', async () => {
       prismaMock.user.findUnique.mockResolvedValue(makeUser());
       prismaMock.user.count.mockResolvedValue(0);
-      await expect(service.update('u1', { status: 'INACTIVE' as any })).rejects.toThrow(ConflictException);
+      await expect(
+        service.update('u1', { status: 'INACTIVE' as any }),
+      ).rejects.toThrow(ConflictException);
       expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
 
@@ -125,7 +165,7 @@ describe('UsersService', () => {
       prismaMock.user.findUnique.mockResolvedValue(makeUser());
       prismaMock.user.count.mockResolvedValue(1);
       prismaMock.user.update.mockResolvedValue({});
-      await service.update('u1', { status: 'INACTIVE' as any });
+      await service.update('u1', { status: 'INACTIVE' });
       expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
       expect(prismaMock.user.update).toHaveBeenCalled();
     });
@@ -134,60 +174,85 @@ describe('UsersService', () => {
       prismaMock.user.findUnique.mockResolvedValue(makeUser());
       prismaMock.role.findUnique.mockResolvedValue(SEC);
       prismaMock.user.count.mockResolvedValue(0);
-      await expect(service.update('u1', { roleId: SEC.id })).rejects.toThrow(ConflictException);
+      await expect(service.update('u1', { roleId: SEC.id })).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('zera a pastoral ao sair de Coordenador', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(makeUser({ roleId: COORD.id, role: COORD, pastoralGroupId: 5 }));
+      prismaMock.user.findUnique.mockResolvedValue(
+        makeUser({ roleId: COORD.id, role: COORD, pastoralGroupId: 5 }),
+      );
       prismaMock.role.findUnique.mockResolvedValue(SEC);
       prismaMock.user.update.mockResolvedValue({});
       await service.update('u1', { roleId: SEC.id });
-      expect(prismaMock.user.update.mock.calls[0][0].data.pastoralGroupId).toBeNull();
+      expect(
+        prismaMock.user.update.mock.calls[0][0].data.pastoralGroupId,
+      ).toBeNull();
     });
 
     it('400 ao virar Coordenador sem informar pastoral', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(makeUser({ roleId: SEC.id, role: SEC }));
+      prismaMock.user.findUnique.mockResolvedValue(
+        makeUser({ roleId: SEC.id, role: SEC }),
+      );
       prismaMock.role.findUnique.mockResolvedValue(COORD);
-      await expect(service.update('u1', { roleId: COORD.id })).rejects.toThrow(BadRequestException);
+      await expect(service.update('u1', { roleId: COORD.id })).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
   describe('changePassword', () => {
     it('404 se não existe', async () => {
       prismaMock.user.findUnique.mockResolvedValue(null);
-      await expect(service.changePassword('x', 'nova12345')).rejects.toThrow(NotFoundException);
+      await expect(service.changePassword('x', 'nova12345')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('grava somente o novo hash', async () => {
       prismaMock.user.findUnique.mockResolvedValue(makeUser());
       prismaMock.user.update.mockResolvedValue({});
       await service.changePassword('u1', 'nova12345');
-      expect(prismaMock.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { passwordHash: 'hashed-pw' } });
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { passwordHash: 'hashed-pw' },
+      });
     });
   });
 
   describe('remove', () => {
     it('409 ao remover o próprio usuário', async () => {
-      await expect(service.remove('u1', 'u1')).rejects.toThrow(ConflictException);
+      await expect(service.remove('u1', 'u1')).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('409 ao remover o último Admin Geral ativo', async () => {
       prismaMock.user.findUnique.mockResolvedValue(makeUser());
       prismaMock.user.count.mockResolvedValue(0);
-      await expect(service.remove('u1', 'outro')).rejects.toThrow(ConflictException);
+      await expect(service.remove('u1', 'outro')).rejects.toThrow(
+        ConflictException,
+      );
       expect(prismaMock.user.delete).not.toHaveBeenCalled();
     });
 
     it('409 amigável quando há registros vinculados (P2003)', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(makeUser({ roleId: SEC.id, role: SEC }));
+      prismaMock.user.findUnique.mockResolvedValue(
+        makeUser({ roleId: SEC.id, role: SEC }),
+      );
       prismaMock.user.delete.mockRejectedValue(prismaError('P2003'));
       await expect(service.remove('u1', 'outro')).rejects.toThrow(/Inative-o/);
     });
 
     it('remove usuário comum', async () => {
-      prismaMock.user.findUnique.mockResolvedValue(makeUser({ roleId: SEC.id, role: SEC }));
+      prismaMock.user.findUnique.mockResolvedValue(
+        makeUser({ roleId: SEC.id, role: SEC }),
+      );
       prismaMock.user.delete.mockResolvedValue({ id: 'u1' });
-      await expect(service.remove('u1', 'outro')).resolves.toEqual({ id: 'u1' });
+      await expect(service.remove('u1', 'outro')).resolves.toEqual({
+        id: 'u1',
+      });
     });
   });
 });

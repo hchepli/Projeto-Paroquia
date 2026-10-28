@@ -35,7 +35,10 @@ function sanitize(value: any): any {
 }
 
 // Ação padrão pelo método HTTP; o decorator pode sobrescrever (ex: POST de sub-rota = UPDATE).
-function resolveAction(method: string, forced?: AuditAction): AuditAction | undefined {
+function resolveAction(
+  method: string,
+  forced?: AuditAction,
+): AuditAction | undefined {
   if (forced) return forced;
   if (method === 'POST') return 'CREATE';
   if (method === 'PATCH' || method === 'PUT') return 'UPDATE';
@@ -53,12 +56,21 @@ export class AuditInterceptor implements NestInterceptor {
     private readonly prismaService: PrismaService,
   ) {}
 
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
-    const entityName = this.reflector.get<string>(AUDITABLE_KEY, context.getHandler());
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<any>> {
+    const entityName = this.reflector.get<string>(
+      AUDITABLE_KEY,
+      context.getHandler(),
+    );
     if (!entityName) return next.handle();
 
     const options =
-      this.reflector.get<AuditableOptions>(AUDITABLE_OPTIONS_KEY, context.getHandler()) ?? {};
+      this.reflector.get<AuditableOptions>(
+        AUDITABLE_OPTIONS_KEY,
+        context.getHandler(),
+      ) ?? {};
 
     const request = context.switchToHttp().getRequest();
     const userId = request.user?.userId;
@@ -79,7 +91,9 @@ export class AuditInterceptor implements NestInterceptor {
       try {
         // ids numéricos chegam como string na URL; models com id Int exigem number
         const id = /^\d+$/.test(params.id) ? Number(params.id) : params.id;
-        previousData = await (this.prismaService as any)[modelKey].findUnique({ where: { id } });
+        previousData = await (this.prismaService as any)[modelKey].findUnique({
+          where: { id },
+        });
       } catch {
         previousData = null;
       }
@@ -89,7 +103,14 @@ export class AuditInterceptor implements NestInterceptor {
       tap({
         next: (response) => {
           // fire-and-forget: falha no log NUNCA derruba nem atrasa a request principal
-          void this.record(action, userId, entityName, params, previousData, response);
+          void this.record(
+            action,
+            userId,
+            entityName,
+            params,
+            previousData,
+            response,
+          );
         },
       }),
     );
@@ -114,8 +135,9 @@ export class AuditInterceptor implements NestInterceptor {
         entity,
         entityId: String(entityId),
         previousData: previousData ? sanitize(previousData) : undefined,
-        newData: action === 'DELETE' || !response ? undefined : sanitize(response),
-      } as any);
+        newData:
+          action === 'DELETE' || !response ? undefined : sanitize(response),
+      });
     } catch (error) {
       this.logger.error(
         `Falha ao gravar audit log (${entity} ${action})`,

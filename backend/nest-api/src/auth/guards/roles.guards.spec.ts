@@ -16,7 +16,13 @@ describe('RolesGuard', () => {
     }) as unknown as ExecutionContext;
 
   // O guard lê DUAS metadatas (IS_PUBLIC_KEY e ROLES_KEY): o mock precisa responder por chave.
-  const mockMeta = ({ isPublic = false, roles }: { isPublic?: boolean; roles?: string[] }) =>
+  const mockMeta = ({
+    isPublic = false,
+    roles,
+  }: {
+    isPublic?: boolean;
+    roles?: string[];
+  }) =>
     reflector.getAllAndOverride.mockImplementation((key: string) =>
       key === IS_PUBLIC_KEY ? isPublic : key === ROLES_KEY ? roles : undefined,
     );
@@ -43,7 +49,9 @@ describe('RolesGuard', () => {
 
   it('lança 403 quando o cargo não está na lista', () => {
     mockMeta({ roles: ['Admin Geral'] });
-    expect(() => guard.canActivate(ctx({ roleName: 'Secretaria' }))).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(ctx({ roleName: 'Secretaria' }))).toThrow(
+      ForbiddenException,
+    );
   });
 
   it('lança 403 quando não há usuário na requisição', () => {

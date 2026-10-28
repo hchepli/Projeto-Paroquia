@@ -1,5 +1,10 @@
 // src/mass-templates/mass-templates.service.ts
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { CreateMassTemplateDto } from './dto/create-mass-template.dto';
@@ -19,7 +24,10 @@ export class MassTemplatesService {
     try {
       return await this.prismaService.massTemplate.create({ data: dto });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException(SLOT_TAKEN);
       }
       throw error;
@@ -27,12 +35,17 @@ export class MassTemplatesService {
   }
 
   findAll() {
-    return this.prismaService.massTemplate.findMany({ orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }] });
+    return this.prismaService.massTemplate.findMany({
+      orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
+    });
   }
 
   async findOne(id: number) {
-    const template = await this.prismaService.massTemplate.findUnique({ where: { id } });
-    if (!template) throw new NotFoundException(`MassTemplate ${id} não encontrado`);
+    const template = await this.prismaService.massTemplate.findUnique({
+      where: { id },
+    });
+    if (!template)
+      throw new NotFoundException(`MassTemplate ${id} não encontrado`);
     return template;
   }
 
@@ -42,24 +55,43 @@ export class MassTemplatesService {
    */
   async update(id: number, dto: UpdateMassTemplateDto, removeFuture = false) {
     if (removeFuture && dto.active !== false) {
-      throw new BadRequestException('removeFuture só pode ser usado junto com active=false.');
+      throw new BadRequestException(
+        'removeFuture só pode ser usado junto com active=false.',
+      );
     }
 
     try {
       return await this.prismaService.$transaction(async (tx) => {
-        const exists = await tx.massTemplate.findUnique({ where: { id }, select: { id: true } });
-        if (!exists) throw new NotFoundException(`MassTemplate ${id} não encontrado`);
+        const exists = await tx.massTemplate.findUnique({
+          where: { id },
+          select: { id: true },
+        });
+        if (!exists)
+          throw new NotFoundException(`MassTemplate ${id} não encontrado`);
 
-        const template = await tx.massTemplate.update({ where: { id }, data: dto });
+        const template = await tx.massTemplate.update({
+          where: { id },
+          data: dto,
+        });
         if (!removeFuture) return template;
 
-        const future = { generatedFromTemplateId: id, dateTime: { gt: new Date() } };
-        const removed = await tx.mass.deleteMany({ where: { ...future, schedules: { none: {} } } });
-        const keptWithSchedule = await tx.mass.count({ where: { ...future, schedules: { some: {} } } });
+        const future = {
+          generatedFromTemplateId: id,
+          dateTime: { gt: new Date() },
+        };
+        const removed = await tx.mass.deleteMany({
+          where: { ...future, schedules: { none: {} } },
+        });
+        const keptWithSchedule = await tx.mass.count({
+          where: { ...future, schedules: { some: {} } },
+        });
         return { ...template, removed: removed.count, keptWithSchedule };
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException(SLOT_TAKEN);
       }
       throw error;
@@ -75,20 +107,28 @@ export class MassTemplatesService {
    * (Mass removida + skip gravado, atômicos) cair no meio, nunca enxergamos
    * "sem Mass e sem Skip" ao mesmo tempo.
    */
-  async ensureGenerated(untilDate: Date, now: Date = new Date()): Promise<void> {
+  async ensureGenerated(
+    untilDate: Date,
+    now: Date = new Date(),
+  ): Promise<void> {
     const minHorizon = new Date(now.getTime() + MIN_WEEKS_AHEAD * WEEK_MS);
     const maxHorizon = new Date(now.getTime() + MAX_WEEKS_AHEAD * WEEK_MS);
     let horizon = untilDate > minHorizon ? untilDate : minHorizon;
     if (horizon > maxHorizon) horizon = maxHorizon;
 
-    const templates = await this.prismaService.massTemplate.findMany({ where: { active: true } });
+    const templates = await this.prismaService.massTemplate.findMany({
+      where: { active: true },
+    });
 
     for (const template of templates) {
       const occurrences = computeOccurrences(template, now, horizon);
       if (occurrences.length === 0) continue;
 
       const existing = await this.prismaService.mass.findMany({
-        where: { generatedFromTemplateId: template.id, templateOccurrenceAt: { in: occurrences } },
+        where: {
+          generatedFromTemplateId: template.id,
+          templateOccurrenceAt: { in: occurrences },
+        },
         select: { templateOccurrenceAt: true },
       });
       const skipped = await this.prismaService.massTemplateSkip.findMany({

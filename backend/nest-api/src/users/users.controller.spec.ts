@@ -9,8 +9,12 @@ import { ROLE_NAMES } from '../common/constrants/role-names.constants';
 describe('UsersController', () => {
   let controller: UsersController;
   const service = {
-    create: jest.fn(), findAll: jest.fn(), findOne: jest.fn(),
-    update: jest.fn(), changePassword: jest.fn(), remove: jest.fn(),
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    changePassword: jest.fn(),
+    remove: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -23,19 +27,28 @@ describe('UsersController', () => {
   });
 
   it('protege o controller INTEIRO para Admin Geral (@Roles na classe, RN004)', () => {
-    expect(Reflect.getMetadata(ROLES_KEY, UsersController)).toEqual([ROLE_NAMES.ADMIN]);
+    expect(Reflect.getMetadata(ROLES_KEY, UsersController)).toEqual([
+      ROLE_NAMES.ADMIN,
+    ]);
   });
 
   it.each(['create', 'update', 'changePassword', 'remove'] as const)(
     '%s é auditado como User',
     (method) => {
-      expect(Reflect.getMetadata(AUDITABLE_KEY, UsersController.prototype[method])).toBe('User');
+      expect(
+        Reflect.getMetadata(AUDITABLE_KEY, UsersController.prototype[method]),
+      ).toBe('User');
     },
   );
 
-  it.each(['findAll', 'findOne'] as const)('%s (leitura) não é auditado', (method) => {
-    expect(Reflect.getMetadata(AUDITABLE_KEY, UsersController.prototype[method])).toBeUndefined();
-  });
+  it.each(['findAll', 'findOne'] as const)(
+    '%s (leitura) não é auditado',
+    (method) => {
+      expect(
+        Reflect.getMetadata(AUDITABLE_KEY, UsersController.prototype[method]),
+      ).toBeUndefined();
+    },
+  );
 
   it('remove repassa o id do ator logado (trava de auto-exclusão)', async () => {
     await controller.remove('alvo', { userId: 'ator' } as any);
@@ -48,7 +61,7 @@ describe('UsersController', () => {
   });
 
   it('findAll repassa os filtros', async () => {
-    await controller.findAll({ roleId: 2 } as any);
+    await controller.findAll({ roleId: 2 });
     expect(service.findAll).toHaveBeenCalledWith({ roleId: 2 });
   });
 });

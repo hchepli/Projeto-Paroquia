@@ -1,5 +1,15 @@
 // src/volunteers/volunteers.controller.ts
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { VolunteersService } from './volunteers.service';
 import { CreateVolunteerDto } from './dto/create-volunteer.dto';
@@ -25,12 +35,18 @@ export class VolunteersController {
   }
 
   @Get()
-  findAll(@Query() query: FindVolunteersQueryDto, @CurrentUser() user: AuthUser) {
+  findAll(
+    @Query() query: FindVolunteersQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.volunteersService.findAll(user, query);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.volunteersService.findOne(id, user);
   }
 

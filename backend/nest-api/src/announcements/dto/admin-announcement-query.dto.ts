@@ -4,7 +4,8 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class AdminAnnouncementQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({
-    description: 'Filtra por status. Se omitido, retorna DRAFT e PUBLISHED juntos.',
+    description:
+      'Filtra por status. Se omitido, retorna DRAFT e PUBLISHED juntos.',
     enum: ['DRAFT', 'PUBLISHED'],
     example: 'DRAFT',
   })

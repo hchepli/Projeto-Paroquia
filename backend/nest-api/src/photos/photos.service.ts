@@ -74,7 +74,9 @@ export class PhotosService {
           throw new NotFoundException('Álbum informado não existe.');
         }
         if (error.code === 'P2002') {
-          throw new ConflictException('Já existe uma foto com esse identificador.');
+          throw new ConflictException(
+            'Já existe uma foto com esse identificador.',
+          );
         }
       }
       throw error;
@@ -133,7 +135,10 @@ export class PhotosService {
           orderBy: { createdAt: 'asc' },
         });
         if (next) {
-          await tx.photo.update({ where: { id: next.id }, data: { isCover: true } });
+          await tx.photo.update({
+            where: { id: next.id },
+            data: { isCover: true },
+          });
         }
       }
       return removed;
@@ -143,7 +148,10 @@ export class PhotosService {
       await this.storageService.deleteFile(photo.url);
     } catch (error) {
       // Não quebra a resposta se o arquivo já não existir — só loga.
-      console.error(`Falha ao remover arquivo do storage para Photo ${id}:`, error);
+      console.error(
+        `Falha ao remover arquivo do storage para Photo ${id}:`,
+        error,
+      );
     }
 
     return deleted;

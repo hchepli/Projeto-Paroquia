@@ -15,12 +15,16 @@ describe('JwtStrategy.validate', () => {
 
   it('rejeita usuário inexistente', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
-    await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
+    await expect(strategy.validate(payload)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('rejeita usuário INACTIVE mesmo com token válido', async () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'u1', status: 'INACTIVE' });
-    await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
+    await expect(strategy.validate(payload)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('devolve cargo e pastoral ATUAIS do banco, não do token', async () => {

@@ -1,5 +1,15 @@
 // src/users/users.controller.ts
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -42,13 +52,19 @@ export class UsersController {
 
   @Auditable('User')
   @Patch(':id/password')
-  changePassword(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangePasswordDto) {
+  changePassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChangePasswordDto,
+  ) {
     return this.usersService.changePassword(id, dto.newPassword);
   }
 
   @Auditable('User')
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthUser) {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: AuthUser,
+  ) {
     return this.usersService.remove(id, actor.userId);
   }
 }

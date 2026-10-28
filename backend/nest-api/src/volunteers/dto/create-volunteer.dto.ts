@@ -11,7 +11,10 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { emailToNull, trimString } from '../../common/transformers/string.transformers';
+import {
+  emailToNull,
+  trimString,
+} from '../../common/transformers/string.transformers';
 
 export const PHONE_REGEX = /^[0-9()+\-\s]{8,20}$/;
 
@@ -23,7 +26,11 @@ export class CreateVolunteerDto {
   @MaxLength(150)
   name!: string;
 
-  @ApiPropertyOptional({ example: 'maria@exemplo.com', maxLength: 180, nullable: true })
+  @ApiPropertyOptional({
+    example: 'maria@exemplo.com',
+    maxLength: 180,
+    nullable: true,
+  })
   @Transform(emailToNull)
   @IsOptional()
   @IsEmail({}, { message: 'E-mail inválido.' })
@@ -34,10 +41,16 @@ export class CreateVolunteerDto {
   @Transform(trimString)
   @IsString()
   @IsNotEmpty()
-  @Matches(PHONE_REGEX, { message: 'Telefone inválido. Use de 8 a 20 caracteres (números, espaço, +, -, parênteses).' })
+  @Matches(PHONE_REGEX, {
+    message:
+      'Telefone inválido. Use de 8 a 20 caracteres (números, espaço, +, -, parênteses).',
+  })
   phone!: string;
 
-  @ApiProperty({ description: 'Pastoral do voluntário (RN006/RN009 — obrigatório, 1:N)', example: 1 })
+  @ApiProperty({
+    description: 'Pastoral do voluntário (RN006/RN009 — obrigatório, 1:N)',
+    example: 1,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)

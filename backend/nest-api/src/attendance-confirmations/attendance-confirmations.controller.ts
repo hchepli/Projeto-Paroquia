@@ -1,5 +1,16 @@
 // src/attendance-confirmations/attendance-confirmations.controller.ts
-import { Body, Controller, Delete, Get, Ip, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AttendanceConfirmationsService } from './attendance-confirmations.service';
@@ -14,7 +25,9 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @ApiBearerAuth()
 @Controller('attendance-confirmations')
 export class AttendanceConfirmationsController {
-  constructor(private readonly attendanceConfirmationsService: AttendanceConfirmationsService) {}
+  constructor(
+    private readonly attendanceConfirmationsService: AttendanceConfirmationsService,
+  ) {}
 
   // RF012 - Garantir Presença, sem login. RNF017: 5 req/min por IP (req.ip; ver TRUST_PROXY_HOPS).
   @Public()

@@ -28,14 +28,16 @@ export class PaginationQueryDto {
   limit?: number = 10;
 
   @ApiPropertyOptional({
-    description: 'Busca textual (case-insensitive) no campo principal do recurso',
+    description:
+      'Busca textual (case-insensitive) no campo principal do recurso',
   })
   @IsOptional()
   @IsString()
   search?: string;
 
   @ApiPropertyOptional({
-    description: 'Campo de ordenação (validado individualmente por cada recurso)',
+    description:
+      'Campo de ordenação (validado individualmente por cada recurso)',
   })
   @IsOptional()
   @IsString()

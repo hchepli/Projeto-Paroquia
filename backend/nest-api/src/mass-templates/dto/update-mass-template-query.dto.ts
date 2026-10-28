@@ -4,7 +4,9 @@ import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional } from 'class-validator';
 
 export class UpdateMassTemplateQueryDto {
-  @ApiPropertyOptional({ description: 'Ao desativar, apaga as ocorrências futuras SEM escala' })
+  @ApiPropertyOptional({
+    description: 'Ao desativar, apaga as ocorrências futuras SEM escala',
+  })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()

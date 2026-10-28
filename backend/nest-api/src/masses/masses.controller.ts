@@ -1,5 +1,15 @@
 // src/masses/masses.controller.ts
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { MassesService } from './masses.service';
 import { CreateMassDto } from './dto/create-mass.dto';
@@ -51,14 +61,20 @@ export class MassesController {
 
   @Auditable('Mass')
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number, @Query() query: RemoveMassQueryDto) {
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: RemoveMassQueryDto,
+  ) {
     return this.massesService.remove(id, query.confirm ?? false);
   }
 
   /** @deprecated Use PATCH /masses/:id com pastoralGroupIds. Sai junto com a migração Modais → Páginas (Bloco 9). */
   @Auditable('Mass', { action: 'UPDATE' })
   @Post(':id/pastoral-groups')
-  linkPastoralGroups(@Param('id', ParseIntPipe) id: number, @Body() dto: LinkPastoralGroupsDto) {
+  linkPastoralGroups(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: LinkPastoralGroupsDto,
+  ) {
     return this.massesService.linkPastoralGroups(id, dto);
   }
 }

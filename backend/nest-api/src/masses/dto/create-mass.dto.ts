@@ -1,7 +1,15 @@
 // src/masses/dto/create-mass.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  ArrayMaxSize, ArrayUnique, IsArray, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength,
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
 } from 'class-validator';
 import { MassType } from '../../../generated/prisma/client';
 import { IsIsoDateTime } from '../../common/decorators/is-iso-datetime.decorator';
@@ -15,7 +23,10 @@ export class CreateMassDto {
   @MaxLength(150)
   title!: string;
 
-  @ApiProperty({ example: '2026-12-25T19:00:00-03:00', description: 'ISO 8601 com hora e fuso' })
+  @ApiProperty({
+    example: '2026-12-25T19:00:00-03:00',
+    description: 'ISO 8601 com hora e fuso',
+  })
   @IsIsoDateTime()
   dateTime!: string;
 
@@ -31,7 +42,10 @@ export class CreateMassDto {
   @MaxLength(180)
   location!: string;
 
-  @ApiPropertyOptional({ description: 'Texto puro (sem HTML)', maxLength: 2000 })
+  @ApiPropertyOptional({
+    description: 'Texto puro (sem HTML)',
+    maxLength: 2000,
+  })
   @Trim()
   @IsOptional()
   @IsString()
@@ -40,7 +54,8 @@ export class CreateMassDto {
 
   @ApiPropertyOptional({
     type: [Number],
-    description: 'Pastorais participantes (RN017). No PATCH: omitido = não altera; [] = remove todas.',
+    description:
+      'Pastorais participantes (RN017). No PATCH: omitido = não altera; [] = remove todas.',
   })
   @IsOptional()
   @IsArray()

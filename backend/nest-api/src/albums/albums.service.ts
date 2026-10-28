@@ -1,5 +1,9 @@
 // src/albums/albums.service.ts
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { CreateAlbumDto } from './dto/create-album.dto';
 import { UpdateAlbumDto } from './dto/update-album.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,7 +27,10 @@ export class AlbumsService {
         data: { ...rest, slug: finalSlug },
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Já existe um álbum com esse nome');
       }
       throw error;
@@ -44,7 +51,10 @@ export class AlbumsService {
 
   async update(id: number, updateAlbumDto: UpdateAlbumDto) {
     await this.findOne(id);
-    return await this.prismaService.album.update({ where: { id }, data: updateAlbumDto });
+    return await this.prismaService.album.update({
+      where: { id },
+      data: updateAlbumDto,
+    });
   }
 
   // Dia 4: remover Album deleta as Photos em cascata no banco (onDelete:
@@ -55,9 +65,13 @@ export class AlbumsService {
   async remove(id: number) {
     await this.findOne(id);
 
-    const photos = await this.prismaService.photo.findMany({ where: { albumId: id } });
+    const photos = await this.prismaService.photo.findMany({
+      where: { albumId: id },
+    });
 
-    const deletedAlbum = await this.prismaService.album.delete({ where: { id } });
+    const deletedAlbum = await this.prismaService.album.delete({
+      where: { id },
+    });
 
     await Promise.all(
       photos.map((photo) =>

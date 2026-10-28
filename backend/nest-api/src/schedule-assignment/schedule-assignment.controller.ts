@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { ScheduleAssignmentService } from './schedule-assignment.service';
 import { CreateScheduleAssignmentDto } from './dto/create-schedule-assignment.dto';
@@ -13,11 +22,16 @@ import { Auditable } from '../audit-logs/decorators/auditable.decorator';
 @Roles(ROLE_NAMES.ADMIN, ROLE_NAMES.SECRETARIA, ROLE_NAMES.COORDENADOR)
 @Controller('schedule-assignment')
 export class ScheduleAssignmentController {
-  constructor(private readonly scheduleAssignmentService: ScheduleAssignmentService) {}
+  constructor(
+    private readonly scheduleAssignmentService: ScheduleAssignmentService,
+  ) {}
 
   @Auditable('ScheduleAssignment')
   @Post()
-  create(@Body() dto: CreateScheduleAssignmentDto, @CurrentUser() user: AuthUser) {
+  create(
+    @Body() dto: CreateScheduleAssignmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.scheduleAssignmentService.create(dto, user);
   }
 
@@ -27,13 +41,20 @@ export class ScheduleAssignmentController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.scheduleAssignmentService.findOne(id, user);
   }
 
   @Auditable('ScheduleAssignment')
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateScheduleAssignmentDto, @CurrentUser() user: AuthUser) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateScheduleAssignmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.scheduleAssignmentService.update(id, dto, user);
   }
 

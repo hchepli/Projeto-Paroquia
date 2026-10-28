@@ -11,9 +11,19 @@ export function escapeCsvValue(raw: string): string {
 
 /** `;` + BOM UTF-8: abre certo (acentos e colunas) no Excel pt-BR. */
 export function buildSchedulesCsv(schedules: ScheduleExportRow[]): string {
-  const header = ['data', 'hora', 'tipo', 'titulo', 'pastoral', 'voluntario', 'funcao'];
+  const header = [
+    'data',
+    'hora',
+    'tipo',
+    'titulo',
+    'pastoral',
+    'voluntario',
+    'funcao',
+  ];
   const lines = flattenRows(schedules).map((r) =>
-    [r.data, r.hora, r.tipo, r.titulo, r.pastoral, r.voluntario, r.funcao].map(escapeCsvValue).join(';'),
+    [r.data, r.hora, r.tipo, r.titulo, r.pastoral, r.voluntario, r.funcao]
+      .map(escapeCsvValue)
+      .join(';'),
   );
   return '\uFEFF' + [header.join(';'), ...lines].join('\r\n') + '\r\n';
 }

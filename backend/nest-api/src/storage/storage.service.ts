@@ -53,7 +53,10 @@ export class StorageService {
     originalFilename: string,
     mimetype: string,
   ): Promise<string> {
-    const optimizedBuffer = await this.validateAndOptimizeImage(buffer, mimetype);
+    const optimizedBuffer = await this.validateAndOptimizeImage(
+      buffer,
+      mimetype,
+    );
     const sanitized = originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `${folder}/${randomUUID()}-${sanitized}`;
     return this.provider.upload(optimizedBuffer, key, mimetype);
@@ -69,17 +72,24 @@ export class StorageService {
    * e falha de forma fechada — nunca sobe o arquivo original sem validar.
    * RNF009: redimensiona (só encolhe) e comprime.
    */
-  private async validateAndOptimizeImage(buffer: Buffer, mimetype: string): Promise<Buffer> {
+  private async validateAndOptimizeImage(
+    buffer: Buffer,
+    mimetype: string,
+  ): Promise<Buffer> {
     let format: string | undefined;
     try {
       format = (await sharp(buffer).metadata()).format;
     } catch {
-      throw new BadRequestException('O arquivo enviado não é uma imagem válida.');
+      throw new BadRequestException(
+        'O arquivo enviado não é uma imagem válida.',
+      );
     }
 
     const detectedMime = format ? FORMAT_TO_MIME[format] : undefined;
     if (!detectedMime) {
-      throw new BadRequestException('Formato de imagem não permitido. Use JPEG, PNG ou WEBP.');
+      throw new BadRequestException(
+        'Formato de imagem não permitido. Use JPEG, PNG ou WEBP.',
+      );
     }
     if (detectedMime !== mimetype) {
       throw new BadRequestException(
@@ -109,7 +119,9 @@ export class StorageService {
       return await pipeline.toBuffer();
     } catch (error) {
       console.error('Falha ao otimizar imagem:', error);
-      throw new BadRequestException('Não foi possível processar a imagem enviada.');
+      throw new BadRequestException(
+        'Não foi possível processar a imagem enviada.',
+      );
     }
   }
 }

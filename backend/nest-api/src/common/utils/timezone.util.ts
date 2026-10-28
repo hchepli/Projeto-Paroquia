@@ -38,7 +38,14 @@ export function getZonedParts(date: Date, tz: string) {
 
 function offsetMs(date: Date, tz: string): number {
   const p = getZonedParts(date, tz);
-  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  const asUtc = Date.UTC(
+    p.year,
+    p.month - 1,
+    p.day,
+    p.hour,
+    p.minute,
+    p.second,
+  );
   return asUtc - Math.floor(date.getTime() / 1000) * 1000;
 }
 

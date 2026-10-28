@@ -1,9 +1,17 @@
 import { buildSchedulesCsv, escapeCsvValue } from './schedules-csv.util';
-import { formatDateBR, formatTimeBR, flattenRows } from './schedule-export.util';
+import {
+  formatDateBR,
+  formatTimeBR,
+  flattenRows,
+} from './schedule-export.util';
 import { normalizeRole } from './schedule-rules.util';
 
 describe('normalizeRole', () => {
-  it.each([[' Leitor ', 'leitor'], ['Ministro   Eucaristia', 'ministro eucaristia'], ['coroinha', 'coroinha']])('%j -> %j', (i, o) => {
+  it.each([
+    [' Leitor ', 'leitor'],
+    ['Ministro   Eucaristia', 'ministro eucaristia'],
+    ['coroinha', 'coroinha'],
+  ])('%j -> %j', (i, o) => {
     expect(normalizeRole(i)).toBe(o);
   });
 });
@@ -19,12 +27,15 @@ describe('datas no fuso America/Sao_Paulo', () => {
 
 describe('CSV', () => {
   const row = (title: string, volunteer = 'Ana') => ({
-    mass: { title, dateTime: new Date('2026-10-17T01:00:00.000Z') }, event: null,
-    pastoralGroup: { name: 'Liturgia' }, assignments: [{ role: 'leitor', volunteer: { name: volunteer } }],
+    mass: { title, dateTime: new Date('2026-10-17T01:00:00.000Z') },
+    event: null,
+    pastoralGroup: { name: 'Liturgia' },
+    assignments: [{ role: 'leitor', volunteer: { name: volunteer } }],
   });
 
   it('neutraliza fórmulas (CSV injection)', () => {
-    for (const v of ['=1+1', '+SUM(A1)', '-2', '@cmd']) expect(escapeCsvValue(v)).toBe(`'${v}`);
+    for (const v of ['=1+1', '+SUM(A1)', '-2', '@cmd'])
+      expect(escapeCsvValue(v)).toBe(`'${v}`);
     expect(escapeCsvValue('Missa de domingo')).toBe('Missa de domingo');
   });
 

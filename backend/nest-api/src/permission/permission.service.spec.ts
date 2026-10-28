@@ -1,6 +1,10 @@
 // src/permission/permission.service.spec.ts
 import { Test } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PermissionService } from './permission.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
@@ -11,14 +15,23 @@ const prismaError = (code: string) =>
 describe('PermissionService', () => {
   let service: PermissionService;
   const prismaMock: any = {
-    permission: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    permission: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
     role: { findUnique: jest.fn() },
   };
 
   beforeEach(async () => {
     jest.resetAllMocks();
     const module = await Test.createTestingModule({
-      providers: [PermissionService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        PermissionService,
+        { provide: PrismaService, useValue: prismaMock },
+      ],
     }).compile();
     service = module.get(PermissionService);
   });
@@ -75,13 +88,17 @@ describe('PermissionService', () => {
   describe('update', () => {
     it('404 se não existe', async () => {
       prismaMock.permission.findUnique.mockResolvedValue(null);
-      await expect(service.update(9, { canEdit: true })).rejects.toThrow(NotFoundException);
+      await expect(service.update(9, { canEdit: true })).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('400 se troca para um cargo inexistente', async () => {
       prismaMock.permission.findUnique.mockResolvedValue({ id: 1 });
       prismaMock.role.findUnique.mockResolvedValue(null);
-      await expect(service.update(1, { roleId: 99 })).rejects.toThrow(BadRequestException);
+      await expect(service.update(1, { roleId: 99 })).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('não consulta o cargo quando roleId não é enviado', async () => {
@@ -94,7 +111,9 @@ describe('PermissionService', () => {
     it('409 se a mudança duplica (cargo, recurso)', async () => {
       prismaMock.permission.findUnique.mockResolvedValue({ id: 1 });
       prismaMock.permission.update.mockRejectedValue(prismaError('P2002'));
-      await expect(service.update(1, { resource: 'eventos' })).rejects.toThrow(ConflictException);
+      await expect(service.update(1, { resource: 'eventos' })).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 

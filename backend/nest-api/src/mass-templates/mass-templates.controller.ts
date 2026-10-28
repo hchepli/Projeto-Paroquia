@@ -1,5 +1,14 @@
 // src/mass-templates/mass-templates.controller.ts
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { MassTemplatesService } from './mass-templates.service';
 import { CreateMassTemplateDto } from './dto/create-mass-template.dto';
@@ -32,6 +41,10 @@ export class MassTemplatesController {
     @Body() dto: UpdateMassTemplateDto,
     @Query() query: UpdateMassTemplateQueryDto,
   ) {
-    return this.massTemplatesService.update(id, dto, query.removeFuture ?? false);
+    return this.massTemplatesService.update(
+      id,
+      dto,
+      query.removeFuture ?? false,
+    );
   }
 }

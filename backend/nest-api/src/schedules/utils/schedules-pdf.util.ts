@@ -1,5 +1,10 @@
 import PDFDocument from 'pdfkit';
-import { flattenRows, formatDateBR, formatDateTimeBR, ScheduleExportRow } from './schedule-export.util';
+import {
+  flattenRows,
+  formatDateBR,
+  formatDateTimeBR,
+  ScheduleExportRow,
+} from './schedule-export.util';
 
 type ExportFilters = { startDate?: string; endDate?: string };
 
@@ -21,18 +26,28 @@ function fmt(s?: string) {
   return Number.isNaN(d.getTime()) ? s : formatDateBR(d);
 }
 
-export function buildSchedulesPdf(schedules: ScheduleExportRow[], filters: ExportFilters): PDFKit.PDFDocument {
+export function buildSchedulesPdf(
+  schedules: ScheduleExportRow[],
+  filters: ExportFilters,
+): PDFKit.PDFDocument {
   const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
   const rows = flattenRows(schedules);
   const left = doc.page.margins.left;
 
-  doc.font('Helvetica-Bold').fontSize(16).text('Paróquia — Relatório de Escalas', { align: 'center' });
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(16)
+    .text('Paróquia — Relatório de Escalas', { align: 'center' });
   doc.moveDown(0.3);
   const periodo =
     filters.startDate || filters.endDate
       ? `Período: ${fmt(filters.startDate) ?? '(início)'} a ${fmt(filters.endDate) ?? '(fim)'}`
       : 'Período: todas as escalas (sem filtro de data)';
-  doc.font('Helvetica').fontSize(10).fillColor('#555').text(periodo, { align: 'center' });
+  doc
+    .font('Helvetica')
+    .fontSize(10)
+    .fillColor('#555')
+    .text(periodo, { align: 'center' });
   doc.moveDown(1).fillColor('#000');
 
   let y = doc.y;
@@ -46,7 +61,11 @@ export function buildSchedulesPdf(schedules: ScheduleExportRow[], filters: Expor
       x += c.width;
     }
     y += 14;
-    doc.moveTo(left, y - 2).lineTo(left + TABLE_WIDTH, y - 2).strokeColor('#ccc').stroke();
+    doc
+      .moveTo(left, y - 2)
+      .lineTo(left + TABLE_WIDTH, y - 2)
+      .strokeColor('#ccc')
+      .stroke();
     doc.font('Helvetica').fontSize(9);
   };
   drawHeader();
@@ -57,7 +76,12 @@ export function buildSchedulesPdf(schedules: ScheduleExportRow[], filters: Expor
     const cells = COLUMNS.map((c) => row[c.key] || '-');
     doc.font('Helvetica').fontSize(9);
     // Altura real do conteúdo: título longo quebra linha sem invadir a próxima
-    const h = Math.max(...cells.map((t, i) => doc.heightOfString(t, { width: COLUMNS[i].width - 4 }))) + PAD;
+    const h =
+      Math.max(
+        ...cells.map((t, i) =>
+          doc.heightOfString(t, { width: COLUMNS[i].width - 4 }),
+        ),
+      ) + PAD;
     if (y + h > limit()) {
       doc.addPage();
       y = doc.page.margins.top;
@@ -77,10 +101,15 @@ export function buildSchedulesPdf(schedules: ScheduleExportRow[], filters: Expor
     doc.switchToPage(range.start + i);
     const m = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
-    doc.fontSize(8).fillColor('#888').text(
-      `Gerado em ${formatDateTimeBR(new Date())} — Página ${i + 1} de ${range.count}`,
-      left, doc.page.height - 30, { width: TABLE_WIDTH, lineBreak: false },
-    );
+    doc
+      .fontSize(8)
+      .fillColor('#888')
+      .text(
+        `Gerado em ${formatDateTimeBR(new Date())} — Página ${i + 1} de ${range.count}`,
+        left,
+        doc.page.height - 30,
+        { width: TABLE_WIDTH, lineBreak: false },
+      );
     doc.page.margins.bottom = m;
   }
   return doc;
