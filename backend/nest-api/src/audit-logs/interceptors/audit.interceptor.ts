@@ -1,4 +1,3 @@
-// src/audit-logs/interceptors/audit.interceptor.ts
 import {
   Injectable,
   NestInterceptor,
@@ -19,17 +18,41 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
 
-// Nunca podem ir para dados_anteriores / dados_novos (RNF005 + RNF011)
-const SENSITIVE_KEYS = new Set(['passwordHash', 'password', 'newPassword']);
+// Comparação em minúsculas (case-insensitive). Nunca vão para os logs (RNF005 + RNF011).
+const SENSITIVE_KEYS = new Set([
+  'passwordhash',
+  'senha_hash',
+  'password',
+  'newpassword',
+  'senha',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+]);
 
-function sanitize(value: any): any {
+// Dados pessoais (LGPD, RNF007): a chave permanece, o valor é mascarado.
+const PII_KEYS = new Set([
+  'phone',
+  'telefone',
+  'email',
+  'contact',
+  'contato',
+  'ipaddress',
+  'ip_address',
+]);
+
+const REDACTED = '[REDACTED]';
+
+export function sanitize(value: any): any {
   if (Array.isArray(value)) return value.map(sanitize);
   if (value && typeof value === 'object' && !(value instanceof Date)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([key]) => !SENSITIVE_KEYS.has(key))
-        .map(([key, val]) => [key, sanitize(val)]),
-    );
+    const out: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      const k = key.toLowerCase();
+      if (SENSITIVE_KEYS.has(k)) continue;
+      out[key] = PII_KEYS.has(k) && val != null ? REDACTED : sanitize(val);
+    }
+    return out;
   }
   return value;
 }
@@ -44,6 +67,24 @@ function resolveAction(
   if (method === 'PATCH' || method === 'PUT') return 'UPDATE';
   if (method === 'DELETE') return 'DELETE';
   return undefined;
+}
+
+function resolveEntityId(
+  options: AuditableOptions,
+  request: any,
+  response: any,
+): string | undefined {
+  const raw =
+    typeof options.entityId === 'function'
+      ? options.entityId({
+          params: request.params ?? {},
+          body: request.body,
+          response,
+        })
+      : (options.entityId ?? response?.id ?? request.params?.id);
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  // audit.entityId é VarChar(36): trunca para nunca estourar (P2000) e perder o log
+  return String(raw).slice(0, 36);
 }
 
 @Injectable()
@@ -74,40 +115,47 @@ export class AuditInterceptor implements NestInterceptor {
 
     const request = context.switchToHttp().getRequest();
     const userId = request.user?.userId;
-    // Proteção extra: sem usuário autenticado, não loga
+    // Proteção extra: sem usuário autenticado (rota pública), não loga
     if (!userId) return next.handle();
 
-    const method: string = request.method;
-    const params = request.params;
-    const action = resolveAction(method, options.action);
+    const action = resolveAction(request.method, options.action);
     if (!action) return next.handle();
 
+    const params = request.params;
     const modelKey = entityName.charAt(0).toLowerCase() + entityName.slice(1);
 
     let previousData: any = null;
 
     // Em UPDATE/DELETE busca o registro ANTES de a request seguir (dados_anteriores reais)
     if ((action === 'UPDATE' || action === 'DELETE') && params?.id) {
-      try {
-        // ids numéricos chegam como string na URL; models com id Int exigem number
-        const id = /^\d+$/.test(params.id) ? Number(params.id) : params.id;
-        previousData = await (this.prismaService as any)[modelKey].findUnique({
-          where: { id },
-        });
-      } catch {
-        previousData = null;
+      const delegate = (this.prismaService as any)[modelKey];
+      if (typeof delegate?.findUnique !== 'function') {
+        // @Auditable('X') sem model prisma.x: antes isso falhava em silêncio
+        this.logger.warn(
+          `@Auditable('${entityName}'): model "${modelKey}" não existe no Prisma; dados_anteriores não serão gravados.`,
+        );
+      } else {
+        try {
+          // ids numéricos chegam como string na URL; models com id Int exigem number
+          const id = /^\d+$/.test(params.id) ? Number(params.id) : params.id;
+          previousData = await delegate.findUnique({ where: { id } });
+        } catch {
+          previousData = null;
+        }
       }
     }
 
     return next.handle().pipe(
       tap({
         next: (response) => {
-          // fire-and-forget: falha no log NUNCA derruba nem atrasa a request principal
+          // fire-and-forget: falha no log NUNCA derruba nem atrasa a request principal.
+          // Se o handler lançar exceção, o `next` do tap não roda: nada é logado.
           void this.record(
             action,
             userId,
             entityName,
-            params,
+            options,
+            request,
             previousData,
             response,
           );
@@ -120,20 +168,20 @@ export class AuditInterceptor implements NestInterceptor {
     action: AuditAction,
     userId: string,
     entity: string,
-    params: any,
+    options: AuditableOptions,
+    request: any,
     previousData: any,
     response: any,
   ) {
     try {
-      // Sub-rotas (ex: POST :id/pastoral-groups) devolvem array/sem id: cai no id da URL
-      const entityId = response?.id ?? params?.id;
+      const entityId = resolveEntityId(options, request, response);
       if (!entityId) return;
 
       await this.auditLogsService.create({
         userId,
         action,
         entity,
-        entityId: String(entityId),
+        entityId,
         previousData: previousData ? sanitize(previousData) : undefined,
         newData:
           action === 'DELETE' || !response ? undefined : sanitize(response),

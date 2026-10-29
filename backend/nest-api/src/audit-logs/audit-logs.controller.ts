@@ -1,34 +1,24 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  ParseUUIDPipe,
-} from '@nestjs/common';
-import { AuditLogsService } from './audit-logs.service';
-import { CreateAuditLogDto } from './dto/create-audit-log.dto';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { AuditLogsService } from './audit-logs.service';
+import { QueryAuditLogsDto } from './dto/query-audit-logs.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
 
+// Somente leitura. Quem grava é o AuditInterceptor (não existe POST: impede forjar log).
 @ApiBearerAuth()
 @Controller('audit-logs')
 export class AuditLogsController {
   constructor(private readonly auditLogsService: AuditLogsService) {}
 
-  @Roles('Admin Geral')
-  @Post()
-  create(@Body() createAuditLogDto: CreateAuditLogDto) {
-    return this.auditLogsService.create(createAuditLogDto);
-  }
-
+  // Lista resumida e paginada (sem JSONs).
   @Roles('Admin Geral', 'Secretaria')
   @Get()
-  findAll() {
-    return this.auditLogsService.findAll();
+  findAll(@Query() query: QueryAuditLogsDto) {
+    return this.auditLogsService.findAll(query);
   }
 
-  @Roles('Admin Geral', 'Secretaria')
+  // Detalhe com dados_anteriores/dados_novos: só Admin Geral.
+  @Roles('Admin Geral')
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.auditLogsService.findOne(id);

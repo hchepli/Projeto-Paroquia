@@ -2,16 +2,15 @@
 import {
   Injectable,
   NotFoundException,
-  ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { UpdatePhotoDto } from './dto/update-photo.dto';
 import { Prisma } from '../../generated/prisma/client';
 
-// Interface local mínima, só com os campos que este service usa
-// (evita depender dos tipos do @types/multer, que já quebraram o build).
+// Interface local mínima (evita depender dos tipos do @types/multer).
 export interface UploadedFileLike {
   buffer: Buffer;
   mimetype: string;
@@ -26,14 +25,22 @@ interface CreatePhotoInput {
 
 @Injectable()
 export class PhotosService {
+  private readonly logger = new Logger(PhotosService.name);
+
   constructor(
     private readonly prismaService: PrismaService,
     private readonly storageService: StorageService,
   ) {}
 
   async create(input: CreatePhotoInput, file: UploadedFileLike) {
-    // O StorageService valida o CONTEÚDO (RNF008) e lança 400 se não for
-    // uma imagem válida — nesse caso nada chega ao storage.
+    // Confere o álbum ANTES do upload: evita subir e apagar arquivo à toa.
+    const album = await this.prismaService.album.findUnique({
+      where: { id: input.albumId },
+      select: { id: true },
+    });
+    if (!album) throw new NotFoundException('Álbum informado não existe.');
+
+    // StorageService valida o CONTEÚDO (RNF008): 400 se não for imagem válida.
     const url = await this.storageService.uploadFile(
       file.buffer,
       `albums/${input.albumId}`,
@@ -42,11 +49,9 @@ export class PhotosService {
     );
 
     try {
-      // RN010 (capa única), validada aqui no service, numa transaction:
-      // - primeira foto do álbum vira capa automaticamente;
-      // - se esta foto for capa, as demais do álbum são desmarcadas.
-      // Obs.: não protege contra 2 requests simultâneos (Bloco 6 —
-      // defesa final = índice único parcial no PostgreSQL).
+      // RN010 (capa única) no service, em transaction:
+      // - 1ª foto do álbum vira capa; - capa nova desmarca as demais.
+      // Não protege 2 requests simultâneos (Bloco 6: índice único parcial).
       return await this.prismaService.$transaction(async (tx) => {
         const existingCover = await tx.photo.count({
           where: { albumId: input.albumId, isCover: true },
@@ -65,19 +70,20 @@ export class PhotosService {
         });
       });
     } catch (error) {
-      // Falhou no banco (ex: albumId inexistente) → desfaz o upload
-      // para não deixar arquivo órfão no storage.
-      await this.storageService.deleteFile(url).catch(() => undefined);
+      // Falhou no banco → desfaz o upload (sem órfão). Se a compensação
+      // também falhar, loga a URL para limpeza manual.
+      await this.storageService.deleteFile(url).catch((e) =>
+        this.logger.error(
+          `ORPHAN_FILE album=${input.albumId} url=${url}`,
+          e instanceof Error ? e.stack : String(e),
+        ),
+      );
 
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2003') {
-          throw new NotFoundException('Álbum informado não existe.');
-        }
-        if (error.code === 'P2002') {
-          throw new ConflictException(
-            'Já existe uma foto com esse identificador.',
-          );
-        }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new NotFoundException('Álbum informado não existe.');
       }
       throw error;
     }
@@ -86,15 +92,13 @@ export class PhotosService {
   findAll(albumId?: number) {
     return this.prismaService.photo.findMany({
       where: albumId !== undefined ? { albumId } : undefined,
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
   }
 
   async findOne(id: number) {
     const photo = await this.prismaService.photo.findUnique({ where: { id } });
-    if (!photo) {
-      throw new NotFoundException('Foto não encontrada');
-    }
+    if (!photo) throw new NotFoundException('Foto não encontrada');
     return photo;
   }
 
@@ -107,10 +111,7 @@ export class PhotosService {
         'Não é possível desmarcar a capa diretamente. Marque outra foto como capa para trocá-la.',
       );
     }
-
-    if (photo.isCover) {
-      return photo; // já é a capa, nada a fazer
-    }
+    if (photo.isCover) return photo;
 
     return this.prismaService.$transaction(async (tx) => {
       await tx.photo.updateMany({
@@ -121,8 +122,8 @@ export class PhotosService {
     });
   }
 
-  // Remove a Photo (banco) e depois o arquivo físico (storage).
-  // Se a foto removida era a capa, a foto mais antiga restante assume.
+  // Remove do banco (transaction) e depois do storage. Se era a capa,
+  // a foto mais antiga restante assume.
   async remove(id: number) {
     const photo = await this.findOne(id);
 
@@ -132,13 +133,10 @@ export class PhotosService {
       if (photo.isCover) {
         const next = await tx.photo.findFirst({
           where: { albumId: photo.albumId },
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         });
         if (next) {
-          await tx.photo.update({
-            where: { id: next.id },
-            data: { isCover: true },
-          });
+          await tx.photo.update({ where: { id: next.id }, data: { isCover: true } });
         }
       }
       return removed;
@@ -147,10 +145,9 @@ export class PhotosService {
     try {
       await this.storageService.deleteFile(photo.url);
     } catch (error) {
-      // Não quebra a resposta se o arquivo já não existir — só loga.
-      console.error(
-        `Falha ao remover arquivo do storage para Photo ${id}:`,
-        error,
+      this.logger.error(
+        `ORPHAN_FILE album=${photo.albumId} photo=${id} url=${photo.url}`,
+        error instanceof Error ? error.stack : String(error),
       );
     }
 

@@ -43,7 +43,9 @@ export class SacramentsController {
     return this.sacramentsService.findBySlug(slug);
   }
 
-  // Reordenação em lote (admin). Sem @Auditable por enquanto: ver nota no relatório.
+  // Reordenação em lote: sem :id e com retorno array, então usa entityId fixo.
+  // newData fica com a nova ordem (array); previousData não existe (sem :id).
+  @Auditable('Sacrament', { action: 'UPDATE', entityId: 'reorder' })
   @Roles('Admin Geral', 'Secretaria')
   @Patch('reorder')
   reorder(@Body() dto: ReorderSacramentsDto) {

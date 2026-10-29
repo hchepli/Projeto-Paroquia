@@ -433,5 +433,8 @@ model AuditLog {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_logs_created_at_id")
+  @@index([entity, entityId], map: "idx_logs_entidade")
+  @@index([userId], map: "idx_logs_usuario")
   @@map("logs_auditoria")
 }
