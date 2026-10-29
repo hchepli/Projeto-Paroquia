@@ -6,11 +6,42 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   DELETE: 'Remoção',
 };
 
-export function mapAuditLogToRow(log: AuditLog) {
+const ENTITY_LABEL: Record<string, string> = {
+  Mass: 'Missa',
+  MassTemplate: 'Missa recorrente',
+  Event: 'Evento',
+  Announcement: 'Comunicado',
+  Schedule: 'Escala',
+  ScheduleAssignment: 'Atribuição de escala',
+  User: 'Usuário',
+  Role: 'Cargo',
+  Permission: 'Permissão',
+  Volunteer: 'Voluntário',
+  PastoralGroup: 'Pastoral',
+  Album: 'Álbum',
+  Photo: 'Foto',
+  Sacrament: 'Sacramento',
+  Category: 'Categoria',
+};
+
+export interface MovimentacaoRow {
+  id: string;
+  data: string;
+  descricao: string;
+  tipo: string;
+  usuario: string;
+}
+
+export function mapAuditLogToRow(log: AuditLog): MovimentacaoRow {
+  const entity = ENTITY_LABEL[log.entity] ?? log.entity;
   return {
-    data: new Date(log.createdAt).toLocaleDateString('pt-BR'),
-    descricao: `${ACTION_LABEL[log.action]} em ${log.entity} (#${log.entityId})`,
+    id: log.id,
+    data: new Date(log.createdAt).toLocaleString('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }),
+    descricao: `${ACTION_LABEL[log.action]} de ${entity}`,
     tipo: ACTION_LABEL[log.action],
-    usuario: log.user?.nome ?? 'Sistema',
+    usuario: log.user?.name ?? 'Sistema',
   };
 }

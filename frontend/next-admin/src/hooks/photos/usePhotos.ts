@@ -1,23 +1,20 @@
 // src/hooks/photos/usePhotos.ts
 import { useQuery } from '@tanstack/react-query';
 import { Photo } from '@/types/photos/photo';
+import { throwApiError } from '@/lib/errors';
 
 async function fetchPhotos(albumId?: number): Promise<Photo[]> {
   const qs = albumId !== undefined ? `?albumId=${albumId}` : '';
   const res = await fetch(`/api/photos${qs}`);
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.message ?? 'Erro ao buscar fotos.');
-  return data;
+  if (!res.ok) await throwApiError(res, 'Erro ao buscar fotos.');
+  return res.json();
 }
 
-// Sem argumento: todas as fotos (comportamento antigo).
-// Com albumId: o filtro é feito no backend.
-// A queryKey começa com 'photos', então invalidateQueries({ queryKey: ['photos'] })
-// continua funcionando em todos os hooks de foto.
+// Passe sempre o albumId. Sem argumento carrega TODAS as fotos (evitar em telas de lista).
 export function usePhotos(albumId?: number) {
   return useQuery({
     queryKey: ['photos', { albumId: albumId ?? null }],
     queryFn: () => fetchPhotos(albumId),
-    enabled: albumId === undefined || Number.isFinite(albumId),
+    enabled: albumId === undefined || (Number.isInteger(albumId) && albumId > 0),
   });
 }

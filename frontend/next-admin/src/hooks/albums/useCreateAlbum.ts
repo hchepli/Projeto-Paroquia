@@ -1,6 +1,7 @@
 // src/hooks/albums/useCreateAlbum.ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Album } from '@/types/albums/album';
+import { throwApiError } from '@/lib/errors';
 
 interface CreateAlbumInput {
   title: string;
@@ -15,17 +16,14 @@ async function createAlbum(input: CreateAlbumInput): Promise<Album> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.message ?? 'Erro ao criar álbum.');
-  return data;
+  if (!res.ok) await throwApiError(res, 'Erro ao criar álbum.');
+  return res.json();
 }
 
 export function useCreateAlbum() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createAlbum,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['albums'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['albums'] }),
   });
 }

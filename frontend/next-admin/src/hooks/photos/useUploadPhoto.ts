@@ -1,6 +1,7 @@
 // src/hooks/photos/useUploadPhoto.ts
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Photo } from '@/types/photos/photo';
+import { throwApiError } from '@/lib/errors';
 
 interface UploadPhotoInput {
   albumId: number;
@@ -15,17 +16,12 @@ async function uploadPhoto({ albumId, file, isCover }: UploadPhotoInput): Promis
   formData.append('file', file);
 
   const res = await fetch('/api/photos', { method: 'POST', body: formData });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.message ?? 'Erro ao enviar foto.');
-  return data;
+  if (!res.ok) await throwApiError(res, 'Erro ao enviar foto.');
+  return res.json();
 }
 
+// Sem invalidate aqui: a tela envia o lote em série e invalida UMA vez no fim
+// (['photos'] e ['albums']), em vez de refetch a cada arquivo.
 export function useUploadPhoto() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: uploadPhoto,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['photos'] });
-    },
-  });
+  return useMutation({ mutationFn: uploadPhoto });
 }

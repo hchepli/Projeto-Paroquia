@@ -1,12 +1,10 @@
 // src/hooks/albums/useDeleteAlbum.ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { throwApiError } from '@/lib/errors';
 
 async function deleteAlbum(id: number): Promise<void> {
   const res = await fetch(`/api/albums/${id}`, { method: 'DELETE' });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.message ?? 'Erro ao remover álbum.');
-  }
+  if (!res.ok) await throwApiError(res, 'Erro ao remover álbum.');
 }
 
 export function useDeleteAlbum() {

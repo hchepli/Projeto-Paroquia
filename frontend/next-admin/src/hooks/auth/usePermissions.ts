@@ -28,5 +28,6 @@ export function usePermissions() {
     canManageEvents: canManage,
     canManageSacraments: canManage,
     canManageAnnouncements: canManage,
+    canManageAlbums: canManage,
   };
 }

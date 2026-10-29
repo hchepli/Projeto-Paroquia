@@ -3,8 +3,10 @@
 
 import { useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Star, Trash2, Upload } from 'lucide-react';
 import Header from '@/components/layout/Header';
+import AlbumForm, { AlbumFormValues } from '@/components/ui/forms/AlbumForm';
 import { useAlbum } from '@/hooks/albums/useAlbum';
 import { useUpdateAlbum } from '@/hooks/albums/useUpdateAlbum';
 import { usePhotos } from '@/hooks/photos/usePhotos';
@@ -12,6 +14,11 @@ import { useUploadPhoto } from '@/hooks/photos/useUploadPhoto';
 import { useSetCoverPhoto } from '@/hooks/photos/useSetCoverPhoto';
 import { useDeletePhoto } from '@/hooks/photos/useDeletePhoto';
 import { useEvents } from '@/hooks/events/useEvents';
+import { usePermissions } from '@/hooks/auth/usePermissions';
+
+// Espelham os limites do back (RNF008). O back continua sendo a barreira real.
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 interface UploadReport {
   sent: number;
@@ -22,13 +29,15 @@ export default function AlbumDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const albumId = Number(params.id);
+  const queryClient = useQueryClient();
+  const { canManageAlbums } = usePermissions();
 
-  const { data: album, isLoading: albumLoading } = useAlbum(albumId);
-  // Filtro por álbum feito no backend (?albumId=).
-  const { data: photos = [], isLoading: photosLoading } = usePhotos(albumId);
-  const { data: eventsResult } = useEvents({ limit: 100 });
-  const events = eventsResult?.data ?? [];
+  const albumId = Number(params.id);
+  const validId = Number.isInteger(albumId) && albumId > 0;
+
+  const { data: album, isLoading: albumLoading, isError, error } = useAlbum(albumId);
+  const { data: photos = [], isLoading: photosLoading } = usePhotos(validId ? albumId : undefined);
+  const { data: eventsResult } = useEvents({ limit: 100, sortBy: 'startDate', order: 'desc' });
 
   const updateAlbum = useUpdateAlbum();
   const uploadPhoto = useUploadPhoto();
@@ -36,47 +45,78 @@ export default function AlbumDetailPage() {
   const deletePhoto = useDeletePhoto();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [eventId, setEventId] = useState<string>('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [uploadReport, setUploadReport] = useState<UploadReport | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Preenche o formulário de edição só na primeira vez que o álbum chega
-  // (evita sobrescrever o que o usuário está digitando a cada refetch).
-  const [formInitialized, setFormInitialized] = useState(false);
-  if (album && !formInitialized) {
-    setTitle(album.title);
-    setDescription(album.description ?? '');
-    setEventId(album.eventId ? String(album.eventId) : '');
-    setFormInitialized(true);
+  if (!validId || isError || (!albumLoading && !album)) {
+    return (
+      <>
+        <Header title="Álbum" onBack={() => router.push('/comunidade/albuns')} />
+        <p className="mt-6 text-sm text-red-600">
+          {!validId
+            ? 'Álbum inválido.'
+            : error instanceof Error
+              ? error.message
+              : 'Álbum não encontrado.'}
+        </p>
+      </>
+    );
   }
 
-  async function handleSaveEdit() {
-    if (!title.trim()) return;
-    await updateAlbum.mutateAsync({
-      id: albumId,
-      title: title.trim(),
-      description: description.trim() || undefined,
-      eventId: eventId ? Number(eventId) : null,
-    });
-    setIsEditing(false);
+  if (albumLoading || !album) {
+    return (
+      <>
+        <Header title="Álbum" onBack={() => router.back()} />
+        <p className="mt-6 text-sm text-gray-400">Carregando álbum...</p>
+      </>
+    );
+  }
+
+  // Garante que o evento já vinculado aparece no select mesmo fora das 100 opções.
+  const eventOptions = (eventsResult?.data ?? []).map((e) => ({
+    value: String(e.id),
+    label: e.name,
+  }));
+  if (album.eventId && !eventOptions.some((o) => o.value === String(album.eventId))) {
+    eventOptions.unshift({ value: String(album.eventId), label: `Evento #${album.eventId}` });
+  }
+
+  async function handleSaveEdit(values: AlbumFormValues) {
+    setFormError(null);
+    try {
+      await updateAlbum.mutateAsync({
+        id: albumId,
+        title: values.title,
+        description: values.description || null, // null limpa a descrição
+        eventId: values.eventId ? Number(values.eventId) : null, // null desvincula (RN003)
+      });
+      setIsEditing(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Erro ao salvar álbum.');
+    }
   }
 
   // UC028 — rejeição parcial: um arquivo inválido NÃO interrompe os demais.
-  // A capa é decidida pelo backend (primeira foto do álbum vira capa).
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0) return;
 
     setUploadReport(null);
     setIsUploading(true);
-
     const report: UploadReport = { sent: 0, failed: [] };
 
     for (const file of files) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        report.failed.push({ name: file.name, reason: 'Tipo não permitido (use JPEG, PNG ou WEBP).' });
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        report.failed.push({ name: file.name, reason: 'Arquivo maior que 5MB.' });
+        continue;
+      }
       try {
         await uploadPhoto.mutateAsync({ albumId, file });
         report.sent += 1;
@@ -88,18 +128,29 @@ export default function AlbumDetailPage() {
       }
     }
 
+    // Uma única invalidação no fim do lote.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['photos'] }),
+      queryClient.invalidateQueries({ queryKey: ['albums'] }),
+    ]);
     setUploadReport(report);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  function handleRemovePhoto(photoId: number) {
-    if (!window.confirm('Remover esta foto?')) return;
-    deletePhoto.mutate(photoId);
+  function handleSetCover(photoId: number) {
+    setActionError(null);
+    setCover.mutate(photoId, {
+      onError: (err) => setActionError(err instanceof Error ? err.message : 'Erro ao marcar capa.'),
+    });
   }
 
-  if (albumLoading || !album) {
-    return null;
+  function handleRemovePhoto(photoId: number) {
+    if (!window.confirm('Remover esta foto?')) return;
+    setActionError(null);
+    deletePhoto.mutate(photoId, {
+      onError: (err) => setActionError(err instanceof Error ? err.message : 'Erro ao remover foto.'),
+    });
   }
 
   return (
@@ -107,58 +158,37 @@ export default function AlbumDetailPage() {
       <Header
         title={album.title}
         description={album.eventId ? `Vinculado ao Evento #${album.eventId}` : 'Álbum avulso'}
-        actions={[
-          {
-            label: isEditing ? 'Cancelar edição' : 'Editar',
-            onClick: () => setIsEditing((prev) => !prev),
-          },
-          { label: 'Voltar para Álbuns', onClick: () => router.push('/comunidade/albuns') },
-        ]}
-        onBack={() => router.back()}
+        actions={
+          canManageAlbums
+            ? [
+                {
+                  label: isEditing ? 'Cancelar edição' : 'Editar',
+                  onClick: () => {
+                    setFormError(null);
+                    setIsEditing((prev) => !prev);
+                  },
+                },
+              ]
+            : []
+        }
+        onBack={() => router.push('/comunidade/albuns')}
       />
 
-      {isEditing && (
-        <div className="mt-6 max-w-lg space-y-4 rounded-lg border border-gray-200 p-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Título</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Descrição</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Evento vinculado</label>
-            <select
-              value={eventId}
-              onChange={(e) => setEventId(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400"
-            >
-              <option value="">Nenhum (álbum avulso)</option>
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {event.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={handleSaveEdit}
-            disabled={updateAlbum.isPending}
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {updateAlbum.isPending ? 'Salvando...' : 'Salvar alterações'}
-          </button>
+      {isEditing && canManageAlbums && (
+        <div className="mt-6 max-w-lg rounded-lg border border-gray-200 p-4">
+          <AlbumForm
+            initialValues={{
+              title: album.title,
+              description: album.description ?? '',
+              eventId: album.eventId ? String(album.eventId) : '',
+            }}
+            eventOptions={eventOptions}
+            submitLabel="Salvar alterações"
+            submitting={updateAlbum.isPending}
+            error={formError}
+            onSubmit={handleSaveEdit}
+            onCancel={() => setIsEditing(false)}
+          />
         </div>
       )}
 
@@ -167,23 +197,31 @@ export default function AlbumDetailPage() {
           <h2 className="text-sm font-semibold text-gray-700">
             Fotos {photosLoading ? '' : `(${photos.length})`}
           </h2>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
-          >
-            <Upload size={14} />
-            {isUploading ? 'Enviando...' : 'Adicionar fotos'}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            hidden
-            onChange={handleFileChange}
-          />
+          {canManageAlbums && (
+            <>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+              >
+                <Upload size={14} />
+                {isUploading ? 'Enviando...' : 'Adicionar fotos'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                hidden
+                onChange={handleFileChange}
+              />
+            </>
+          )}
         </div>
+
+        {actionError && (
+          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</div>
+        )}
 
         {uploadReport && (
           <div className="mb-4 space-y-2">
@@ -196,8 +234,8 @@ export default function AlbumDetailPage() {
               <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
                 <p className="font-medium">{uploadReport.failed.length} foto(s) recusada(s):</p>
                 <ul className="mt-1 list-disc pl-5">
-                  {uploadReport.failed.map((f) => (
-                    <li key={f.name}>
+                  {uploadReport.failed.map((f, i) => (
+                    <li key={`${f.name}-${i}`}>
                       {f.name}: {f.reason}
                     </li>
                   ))}
@@ -208,7 +246,6 @@ export default function AlbumDetailPage() {
         )}
 
         {photosLoading && <p className="text-sm text-gray-400">Carregando fotos...</p>}
-
         {!photosLoading && photos.length === 0 && (
           <p className="text-sm text-gray-400">Nenhuma foto neste álbum ainda.</p>
         )}
@@ -217,7 +254,7 @@ export default function AlbumDetailPage() {
           {photos.map((photo) => (
             <div key={photo.id} className="group relative overflow-hidden rounded-lg border border-gray-200">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photo.url} alt="" className="aspect-square w-full object-cover" />
+              <img src={photo.url} alt="" loading="lazy" className="aspect-square w-full object-cover" />
 
               {photo.isCover && (
                 <span className="absolute left-2 top-2 rounded bg-yellow-400 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-900">
@@ -225,24 +262,28 @@ export default function AlbumDetailPage() {
                 </span>
               )}
 
-              <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-2 bg-black/50 px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100">
-                {!photo.isCover && (
+              {canManageAlbums && (
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-2 bg-black/50 px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  {!photo.isCover && (
+                    <button
+                      onClick={() => handleSetCover(photo.id)}
+                      disabled={setCover.isPending}
+                      title="Marcar como capa"
+                      className="text-white hover:text-yellow-300 disabled:opacity-50"
+                    >
+                      <Star size={16} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => setCover.mutate(photo.id)}
-                    title="Marcar como capa"
-                    className="text-white hover:text-yellow-300"
+                    onClick={() => handleRemovePhoto(photo.id)}
+                    disabled={deletePhoto.isPending}
+                    title="Remover foto"
+                    className="text-white hover:text-red-400 disabled:opacity-50"
                   >
-                    <Star size={16} />
+                    <Trash2 size={16} />
                   </button>
-                )}
-                <button
-                  onClick={() => handleRemovePhoto(photo.id)}
-                  title="Remover foto"
-                  className="text-white hover:text-red-400"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

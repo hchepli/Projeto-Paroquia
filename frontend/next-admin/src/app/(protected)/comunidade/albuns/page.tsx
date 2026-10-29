@@ -9,109 +9,94 @@ import Card from '@/components/ui/cards/Card';
 import GenericTable, { GenericTableColumn, GenericTableAction } from '@/components/ui/tables/GenericTable';
 import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import { useAlbums } from '@/hooks/albums/useAlbums';
-import { usePhotos } from '@/hooks/photos/usePhotos';
 import { useDeleteAlbum } from '@/hooks/albums/useDeleteAlbum';
+import { usePermissions } from '@/hooks/auth/usePermissions';
 import { Album } from '@/types/albums/album';
-import { eventOptionLabel } from '@/lib/events/form';
 
 const PAGE_SIZE = 10;
 
 export default function AlbunsPage() {
   const router = useRouter();
-  const { data: albums = [], isLoading: albumsLoading } = useAlbums();
-  const { data: photos = [], isLoading: photosLoading } = usePhotos();
+  const { canManageAlbums } = usePermissions();
+  // A lista já vem com photoCount/coverUrl/eventName (1 query no back).
+  const { data: albums = [], isLoading, isError, error } = useAlbums();
   const deleteAlbum = useDeleteAlbum();
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [showNoCover, setShowNoCover] = useState(false);
+  const [showEmpty, setShowEmpty] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const photosByAlbum = useMemo(() => {
-    const map = new Map<number, typeof photos>();
-    for (const photo of photos) {
-      const list = map.get(photo.albumId) ?? [];
-      list.push(photo);
-      map.set(photo.albumId, list);
-    }
-    return map;
-  }, [photos]);
-
-  const albumsWithoutCover = useMemo(
-    () => albums.filter((album) => !(photosByAlbum.get(album.id) ?? []).some((p) => p.isCover)),
-    [albums, photosByAlbum],
-  );
-
+  const emptyAlbums = useMemo(() => albums.filter((a) => (a.photoCount ?? 0) === 0), [albums]);
+  const totalPhotos = albums.reduce((sum, a) => sum + (a.photoCount ?? 0), 0);
   const linkedToEventCount = albums.filter((a) => a.eventId !== null).length;
 
   const filteredAlbums = useMemo(() => {
-    const base = showNoCover ? albumsWithoutCover : albums;
+    const base = showEmpty ? emptyAlbums : albums;
     if (!search) return base;
-    return base.filter((album) => album.title.toLowerCase().includes(search.toLowerCase()));
-  }, [albums, albumsWithoutCover, showNoCover, search]);
+    return base.filter((a) => a.title.toLowerCase().includes(search.toLowerCase()));
+  }, [albums, emptyAlbums, showEmpty, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAlbums.length / PAGE_SIZE));
   const paginatedAlbums = filteredAlbums.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function handleRemove(album: Album) {
-    const photoCount = (photosByAlbum.get(album.id) ?? []).length;
+    const count = album.photoCount ?? 0;
     const confirmed = window.confirm(
-      photoCount > 0
-        ? `Remover o álbum "${album.title}" também removerá ${photoCount} foto(s) vinculada(s). Confirmar?`
+      count > 0
+        ? `Remover o álbum "${album.title}" também removerá ${count} foto(s) vinculada(s). Confirmar?`
         : `Remover o álbum "${album.title}"?`,
     );
     if (!confirmed) return;
-    deleteAlbum.mutate(album.id);
+    setActionError(null);
+    deleteAlbum.mutate(album.id, {
+      onError: (err) => setActionError(err instanceof Error ? err.message : 'Erro ao remover álbum.'),
+    });
   }
 
   const columns: GenericTableColumn<Album>[] = [
     {
       key: 'title',
       label: 'Título',
-      render: (album) => <span className="font-medium text-gray-800">{album.title}</span>,
+      render: (a) => <span className="font-medium text-gray-800">{a.title}</span>,
     },
     {
       key: 'event',
       label: 'Evento vinculado',
-      render: (album) => (album.eventId ? `Evento #${album.eventId}` : 'Avulso'),
+      render: (a) => (a.eventId ? (a.eventName ?? `Evento #${a.eventId}`) : 'Avulso'),
     },
-    {
-      key: 'photos',
-      label: 'Fotos',
-      render: (album) => (photosByAlbum.get(album.id) ?? []).length,
-    },
+    { key: 'photos', label: 'Fotos', render: (a) => a.photoCount ?? 0 },
     {
       key: 'cover',
       label: 'Capa',
-      render: (album) => {
-        const cover = (photosByAlbum.get(album.id) ?? []).find((p) => p.isCover);
-        if (!cover) return <span className="text-xs text-amber-600">Sem capa</span>;
-        return (
+      render: (a) =>
+        a.coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={cover.url}
-            alt={`Capa do álbum ${album.title}`}
+            src={a.coverUrl}
+            alt={`Capa do álbum ${a.title}`}
+            loading="lazy"
             className="h-8 w-8 rounded object-cover"
           />
-        );
-      },
+        ) : (
+          <span className="text-xs text-amber-600">Sem fotos</span>
+        ),
     },
   ];
 
   const actions: GenericTableAction<Album>[] = [
-    {
-      label: 'Ver fotos',
-      onClick: (album) => router.push(`/comunidade/albuns/${album.id}`),
-    },
-    {
-      label: 'Editar',
-      onClick: (album) => router.push(`/comunidade/albuns/${album.id}?edit=1`),
-    },
-    {
-      label: 'Remover',
-      onClick: handleRemove,
-      variant: 'danger',
-      disabled: () => deleteAlbum.isPending,
-    },
+    { label: 'Ver fotos', onClick: (a) => router.push(`/comunidade/albuns/${a.id}`) },
+    ...(canManageAlbums
+      ? [
+          { label: 'Editar', onClick: (a: Album) => router.push(`/comunidade/albuns/${a.id}?edit=1`) },
+          {
+            label: 'Remover',
+            onClick: handleRemove,
+            variant: 'danger' as const,
+            disabled: () => deleteAlbum.isPending,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -119,33 +104,43 @@ export default function AlbunsPage() {
       <Header
         title="Galeria — Álbuns"
         description="Gerencie os álbuns de fotos da paróquia."
-        actions={[{ label: 'Novo Álbum', onClick: () => router.push('/comunidade/albuns/registrar') }]}
+        actions={
+          canManageAlbums
+            ? [{ label: 'Novo Álbum', onClick: () => router.push('/comunidade/albuns/registrar') }]
+            : []
+        }
         onBack={() => router.back()}
       />
 
       <div className="mt-8 grid grid-cols-4 gap-4">
         <Card icon={FolderOpen} title="Álbuns" value={albums.length} />
-        <Card icon={Images} title="Fotos" value={photos.length} />
+        <Card icon={Images} title="Fotos" value={totalPhotos} />
         <Card icon={Link2} title="Vinculados a Evento" value={linkedToEventCount} />
         <Card
           icon={AlertCircle}
-          title="Sem capa definida"
-          value={albumsWithoutCover.length}
+          title="Sem fotos"
+          value={emptyAlbums.length}
           onClick={() => {
-            setShowNoCover((prev) => !prev);
+            setShowEmpty((prev) => !prev);
             setPage(1);
           }}
-          active={showNoCover}
+          active={showEmpty}
         />
       </div>
+
+      {(isError || actionError) && (
+        <p className="mt-4 text-sm text-red-600">
+          {actionError ?? (error instanceof Error ? error.message : 'Erro ao carregar álbuns.')}
+        </p>
+      )}
 
       <div className="my-6">
         <GenericTable
           columns={columns}
           items={paginatedAlbums}
-          rowKey={(album) => album.id}
+          rowKey={(a) => a.id}
           actions={actions}
-          isLoading={albumsLoading || photosLoading}
+          isLoading={isLoading}
           loadingMessage="Carregando álbuns..."
           emptyMessage="Nenhum álbum encontrado."
           search={search}

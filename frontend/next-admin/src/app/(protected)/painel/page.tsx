@@ -97,7 +97,7 @@ export default function PainelPage() {
     status: 'ACTIVE',
     limit: 50,
   });
-  const { data: auditLogsResult, isLoading: auditLoading } = useAuditLogs();
+const { data: auditLogsResult, isLoading: auditLoading, isError: auditError } = useAuditLogs({ limit: 10 });
 
   const { start, end } = useMemo(() => getMonthRange(currentDate), [currentDate]);
   const { data: calendarItems } = useCalendar(start, end);
@@ -156,10 +156,10 @@ export default function PainelPage() {
     [photos],
   );
 
-  const auditRows = useMemo(
-    () => (auditLogsResult?.data ?? []).slice(0, 10).map(mapAuditLogToRow),
-    [auditLogsResult],
-  );
+const auditRows = useMemo(
+  () => (auditLogsResult?.data ?? []).map(mapAuditLogToRow),
+  [auditLogsResult],
+);
 
   const eventsTableItems = useMemo(
     () =>
@@ -256,6 +256,7 @@ export default function PainelPage() {
                 items={auditRows}
                 forbidden={auditLogsResult?.forbidden}
                 isLoading={auditLoading}
+                isError={auditError}
               />
             </div>
             <div className="col-span-1">
