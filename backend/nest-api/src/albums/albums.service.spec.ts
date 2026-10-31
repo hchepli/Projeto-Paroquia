@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { AlbumsService } from './albums.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -124,6 +125,26 @@ describe('AlbumsService', () => {
 
       await expect(service.remove(1)).resolves.toEqual({ id: 1 });
       expect(storage.deleteFile).toHaveBeenCalledTimes(2);
+    });
+
+    it('404 e não toca em banco/storage se o álbum não existe', async () => {
+      prisma.album.findUnique.mockResolvedValue(null);
+      await expect(service.remove(1)).rejects.toThrow(NotFoundException);
+      expect(prisma.album.delete).not.toHaveBeenCalled();
+      expect(storage.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('apaga o álbum no banco ANTES dos arquivos', async () => {
+      prisma.album.findUnique.mockResolvedValue({ id: 1 });
+      prisma.photo.findMany.mockResolvedValue([{ id: 1, url: 'u1' }]);
+      prisma.album.delete.mockResolvedValue({ id: 1 });
+      storage.deleteFile.mockResolvedValue(undefined);
+
+      await service.remove(1);
+
+      expect(prisma.album.delete.mock.invocationCallOrder[0]).toBeLessThan(
+        storage.deleteFile.mock.invocationCallOrder[0],
+      );
     });
   });
 });

@@ -60,7 +60,10 @@ describe('MassTemplatesService', () => {
     it('cria só as faltantes, com skipDuplicates e templateOccurrenceAt = dateTime', async () => {
       prismaMock.massTemplate.findMany.mockResolvedValue([TEMPLATE]);
       prismaMock.mass.findMany.mockResolvedValue([
-        { templateOccurrenceAt: new Date('2026-10-19T22:00:00Z') },
+        {
+          generatedFromTemplateId: 1,
+          templateOccurrenceAt: new Date('2026-10-19T22:00:00Z'),
+        },
       ]);
       await service.ensureGenerated(new Date('2026-11-01T00:00:00Z'), NOW);
 
@@ -79,13 +82,34 @@ describe('MassTemplatesService', () => {
     it('respeita ocorrência removida (skip) e não recria', async () => {
       prismaMock.massTemplate.findMany.mockResolvedValue([TEMPLATE]);
       prismaMock.massTemplateSkip.findMany.mockResolvedValue([
-        { occurrenceAt: new Date('2026-10-19T22:00:00Z') },
+        { templateId: 1, occurrenceAt: new Date('2026-10-19T22:00:00Z') },
       ]);
       await service.ensureGenerated(new Date('2026-10-20T00:00:00Z'), NOW);
       const created = (
         prismaMock.mass.createMany.mock.calls[0]?.[0].data ?? []
       ).map((d: any) => d.dateTime.toISOString());
       expect(created).not.toContain('2026-10-19T22:00:00.000Z');
+    });
+
+    it('skip de um template não bloqueia a mesma data em outro template', async () => {
+      prismaMock.massTemplate.findMany.mockResolvedValue([
+        TEMPLATE,
+        { ...TEMPLATE, id: 2, location: 'Capela' },
+      ]);
+      prismaMock.massTemplateSkip.findMany.mockResolvedValue([
+        { templateId: 1, occurrenceAt: new Date('2026-10-19T22:00:00Z') },
+      ]);
+      await service.ensureGenerated(new Date('2026-10-20T00:00:00Z'), NOW);
+
+      const data = prismaMock.mass.createMany.mock.calls[0][0].data;
+      const has = (id: number) =>
+        data.some(
+          (d: any) =>
+            d.generatedFromTemplateId === id &&
+            d.dateTime.toISOString() === '2026-10-19T22:00:00.000Z',
+        );
+      expect(has(1)).toBe(false);
+      expect(has(2)).toBe(true);
     });
 
     it('mínimo de 8 semanas mesmo com untilDate curto', async () => {

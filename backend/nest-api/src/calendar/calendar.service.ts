@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MassTemplatesService } from '../mass-templates/mass-templates.service';
 import { CalendarQueryDto } from './dto/calendar-query.dto';
@@ -9,6 +9,8 @@ const MAX_RANGE_DAYS = 366;
 
 @Injectable()
 export class CalendarService {
+  private readonly logger = new Logger(CalendarService.name);
+
   constructor(
     private readonly prismaService: PrismaService,
     private readonly massTemplatesService: MassTemplatesService,
@@ -19,7 +21,17 @@ export class CalendarService {
     const end = new Date(query.end);
     assertValidRange(start, end, MAX_RANGE_DAYS); // 400 se invertido ou > 366 dias
 
-    await this.massTemplatesService.ensureGenerated(end);
+    // A geração de recorrentes é efeito colateral de um GET público: se falhar,
+    // a leitura NÃO pode cair (devolve o que já existe e registra o problema).
+    try {
+      await this.massTemplatesService.ensureGenerated(end);
+    } catch (error) {
+      this.logger.warn(
+        `ensureGenerated falhou; devolvendo calendário sem geração. ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
 
     const [masses, events] = await Promise.all([
       this.prismaService.mass.findMany({

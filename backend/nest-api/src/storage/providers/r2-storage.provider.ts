@@ -1,10 +1,12 @@
-// src/storage/providers/r2-storage.provider.ts
 import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import { StorageProvider } from '../storage-provider.interface';
+import { StorageProvider, UploadInput } from '../storage-provider.interface';
+
+// A chave tem UUID (nunca é sobrescrita), então o arquivo é imutável: cache longo (RNF009).
+const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 export class R2StorageProvider implements StorageProvider {
   private readonly client: S3Client;
@@ -25,13 +27,22 @@ export class R2StorageProvider implements StorageProvider {
     });
   }
 
-  async upload(buffer: Buffer, key: string, mimetype: string): Promise<string> {
+  async upload({
+    buffer,
+    folder,
+    id,
+    extension,
+    mimetype,
+  }: UploadInput): Promise<string> {
+    // R2 não acrescenta extensão: ela entra na chave.
+    const key = `${folder}/${id}.${extension}`;
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         Body: buffer,
         ContentType: mimetype,
+        CacheControl: CACHE_CONTROL,
       }),
     );
     return `${this.publicUrl}/${key}`;

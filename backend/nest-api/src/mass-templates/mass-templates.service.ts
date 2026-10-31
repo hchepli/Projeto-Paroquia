@@ -107,7 +107,7 @@ export class MassTemplatesService {
    * (Mass removida + skip gravado, atômicos) cair no meio, nunca enxergamos
    * "sem Mass e sem Skip" ao mesmo tempo.
    */
-  async ensureGenerated(
+ async ensureGenerated(
     untilDate: Date,
     now: Date = new Date(),
   ): Promise<void> {
@@ -120,31 +120,47 @@ export class MassTemplatesService {
       where: { active: true },
     });
 
-    for (const template of templates) {
-      const occurrences = computeOccurrences(template, now, horizon);
-      if (occurrences.length === 0) continue;
+    const plans = templates
+      .map((template) => ({
+        template,
+        occurrences: computeOccurrences(template, now, horizon),
+      }))
+      .filter((plan) => plan.occurrences.length > 0);
+    if (plans.length === 0) return;
 
-      const existing = await this.prismaService.mass.findMany({
-        where: {
-          generatedFromTemplateId: template.id,
-          templateOccurrenceAt: { in: occurrences },
-        },
-        select: { templateOccurrenceAt: true },
-      });
-      const skipped = await this.prismaService.massTemplateSkip.findMany({
-        where: { templateId: template.id, occurrenceAt: { in: occurrences } },
-        select: { occurrenceAt: true },
-      });
+    const templateIds = plans.map((p) => p.template.id);
+    const times = plans.flatMap((p) => p.occurrences.map((d) => d.getTime()));
+    const from = new Date(Math.min(...times));
+    const to = new Date(Math.max(...times));
 
-      const taken = new Set<number>([
-        ...existing.map((m) => m.templateOccurrenceAt!.getTime()),
-        ...skipped.map((s) => s.occurrenceAt.getTime()),
-      ]);
-      const missing = occurrences.filter((d) => !taken.has(d.getTime()));
-      if (missing.length === 0) continue;
+    const existing = await this.prismaService.mass.findMany({
+      where: {
+        generatedFromTemplateId: { in: templateIds },
+        templateOccurrenceAt: { gte: from, lte: to },
+      },
+      select: { generatedFromTemplateId: true, templateOccurrenceAt: true },
+    });
+    const skipped = await this.prismaService.massTemplateSkip.findMany({
+      where: {
+        templateId: { in: templateIds },
+        occurrenceAt: { gte: from, lte: to },
+      },
+      select: { templateId: true, occurrenceAt: true },
+    });
 
-      await this.prismaService.mass.createMany({
-        data: missing.map((dateTime) => ({
+    const keyOf = (templateId: number | null, date: Date) =>
+      `${templateId}:${date.getTime()}`;
+    const taken = new Set<string>([
+      ...existing.map((m) =>
+        keyOf(m.generatedFromTemplateId, m.templateOccurrenceAt!),
+      ),
+      ...skipped.map((s) => keyOf(s.templateId, s.occurrenceAt)),
+    ]);
+
+    const data = plans.flatMap(({ template, occurrences }) =>
+      occurrences
+        .filter((d) => !taken.has(keyOf(template.id, d)))
+        .map((dateTime) => ({
           title: template.title,
           dateTime,
           templateOccurrenceAt: dateTime, // identidade imutável; dateTime pode ser editado depois
@@ -153,8 +169,9 @@ export class MassTemplatesService {
           notes: template.notes,
           generatedFromTemplateId: template.id,
         })),
-        skipDuplicates: true,
-      });
-    }
+    );
+    if (data.length === 0) return;
+
+    await this.prismaService.mass.createMany({ data, skipDuplicates: true });
   }
 }
