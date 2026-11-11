@@ -1,4 +1,4 @@
-// src/app/(protected)/comunidade/eventos/[id]/page.tsx
+// src/app/(protected)/eventos/[id]/page.tsx
 'use client';
 
 import { FormEvent, useState } from 'react';
@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import EventFormFields from '@/components/ui/forms/EventFormFields';
 import EventDeleteDialog from '@/components/ui/forms/EventDeleteConfirm';
+import FormActions from '@/components/ui/buttons/FormActions';
 import { useEvent } from '@/hooks/events/useEvent';
 import { useUpdateEvent } from '@/hooks/events/useUpdateEvent';
 import { usePermissions } from '@/hooks/auth/usePermissions';
@@ -19,6 +20,8 @@ import {
 } from '@/lib/events/form';
 import { AdminEvent } from '@/types/events/events';
 
+const LIST_PATH = '/eventos';
+
 export default function EventoDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -29,19 +32,22 @@ export default function EventoDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (isLoading || permLoading) {
-    return <p className="mt-8 text-sm text-gray-400">Carregando evento...</p>;
+    return <p className="mt-8 text-base text-gray-600">Carregando o evento...</p>;
   }
 
   if (isError || !event) {
     return (
       <>
-        <Header title="Evento" description="" onBack={() => router.push('/comunidade/eventos')} />
-        <p className="mt-8 text-sm text-red-600">
-          {getFriendlyErrorMessage(error, 'Erro ao buscar evento.')}{' '}
-          <button onClick={() => refetch()} className="underline">
+        <Header title="Evento" description="" onBack={() => router.push(LIST_PATH)} />
+        <div role="alert" className="mt-8 text-base text-red-700">
+          {getFriendlyErrorMessage(
+            error,
+            'Não foi possível abrir este evento. Volte para a lista e escolha o evento de novo.',
+          )}{' '}
+          <button type="button" onClick={() => refetch()} className="font-medium underline">
             Tentar novamente
           </button>
-        </p>
+        </div>
       </>
     );
   }
@@ -51,25 +57,30 @@ export default function EventoDetailPage() {
       <Header
         title={`${canManageEvents ? 'Editar' : 'Evento'}: ${event.name}`}
         description={
-          canManageEvents ? 'Atualize os dados do evento.' : 'Visualização somente leitura.'
+          canManageEvents ? 'Mude o que for preciso e clique em “Salvar alterações”.' : 'Só para ver: não é possível mudar nada.'
         }
         actions={
           canManageEvents
             ? [
                 {
-                  label: 'Ver confirmações de presença',
-                  onClick: () => router.push(`/comunidade/eventos/${eventId}/confirmacoes`),
+                  label: 'Ver quem vai',
+                  // Assume que Header repassa `kind` ao ActionButton (ver relatório).
+                  kind: 'navigate',
+                  onClick: () => router.push(`/eventos/${eventId}/confirmacoes`),
                 },
               ]
             : []
         }
-        onBack={() => router.push('/comunidade/eventos')}
+        onBack={() => router.push(LIST_PATH)}
       />
 
       {event.status === 'CANCELLED' && (
-        <div className="mt-6 max-w-2xl rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Este evento está cancelado: não aparece no calendário nem no site.
-          {canManageEvents && ' Altere o status para "Ativo" para reativá-lo.'}
+        <div
+          role="status"
+          className="mt-6 rounded-md bg-amber-50 px-3 py-2 text-base text-amber-900"
+        >
+          Este evento está cancelado e não aparece no calendário nem no site.
+          {canManageEvents && ' Para reativar, mude a “Situação do evento” para “Ativo” e salve.'}
         </div>
       )}
 
@@ -85,7 +96,7 @@ export default function EventoDetailPage() {
         <EventDeleteDialog
           event={event}
           onClose={() => setDeleteOpen(false)}
-          onDeleted={() => router.push('/comunidade/eventos')}
+          onDeleted={() => router.push(LIST_PATH)}
         />
       )}
     </>
@@ -123,14 +134,16 @@ function EventEditForm({
 
     try {
       await updateEvent.mutateAsync({ id: event.id, ...buildEventPayload(values, 'edit') });
-      router.push('/comunidade/eventos');
+      router.push(LIST_PATH);
     } catch (err) {
-      setError(getEventSaveError(err, 'Erro ao salvar evento.'));
+      setError(
+        getEventSaveError(err, 'Não foi possível salvar as alterações. Confira os dados e tente de novo.'),
+      );
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-6 max-w-2xl space-y-6">
+    <form onSubmit={handleSubmit} className="mt-6 space-y-6">
       <EventFormFields
         values={values}
         onChange={handleChange}
@@ -138,24 +151,27 @@ function EventEditForm({
         showStatus={!readOnly}
       />
 
-      {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {error && (
+        <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-base text-red-700">
+          {error}
+        </div>
+      )}
 
       {!readOnly && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
             onClick={onRequestDelete}
-            className="rounded-md px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            disabled={updateEvent.isPending}
+            className="rounded-md px-4 py-2.5 text-base font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
           >
             Remover evento
           </button>
-          <button
-            type="submit"
-            disabled={updateEvent.isPending}
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {updateEvent.isPending ? 'Salvando...' : 'Salvar alterações'}
-          </button>
+          <FormActions
+            onCancel={() => router.push(LIST_PATH)}
+            submitLabel="Salvar alterações"
+            submitting={updateEvent.isPending}
+          />
         </div>
       )}
     </form>

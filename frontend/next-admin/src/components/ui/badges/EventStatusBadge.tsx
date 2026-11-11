@@ -5,8 +5,8 @@ export default function EventStatusBadge({ status }: { status: EventStatus }) {
   const active = status === 'ACTIVE';
   return (
     <span
-      className={`rounded px-2 py-0.5 text-xs font-medium ${
-        active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+      className={`inline-block rounded px-2.5 py-1 text-sm font-medium ${
+        active ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-700'
       }`}
     >
       {active ? 'Ativo' : 'Cancelado'}

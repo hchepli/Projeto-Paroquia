@@ -1,4 +1,4 @@
-// src/app/(protected)/comunidade/eventos/[id]/confirmacoes/page.tsx
+// src/app/(protected)/eventos/[id]/confirmacoes/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -18,19 +18,19 @@ import { ApiError, getFriendlyErrorMessage } from '@/lib/errors';
 import { AttendanceConfirmation } from '@/types/attendance-confirmations/attendance-confirmation';
 
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('pt-BR');
+  const time = d
+    .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    .replace(':', 'h');
+  return `${date} às ${time}`;
 }
 
 export default function ConfirmacoesPresencaPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const eventId = Number(params.id);
+  const validId = Number.isFinite(eventId) && eventId > 0;
 
   const { canManageEvents, isLoading: permLoading } = usePermissions();
 
@@ -43,9 +43,9 @@ export default function ConfirmacoesPresencaPage() {
 
   const deleteConfirmation = useDeleteAttendanceConfirmation();
 
-  // Coordenador nem dispara a consulta (o back responderia 403).
+  // Coordenador (ou id inválido) nem dispara a consulta (o back responderia 403/400).
   const { data, isLoading, isError, error, refetch } = useAttendanceConfirmations({
-    eventId,
+    eventId: validId ? eventId : null,
     page,
     limit: 10,
     search: debouncedSearch || undefined,
@@ -53,17 +53,29 @@ export default function ConfirmacoesPresencaPage() {
     enabled: canManageEvents,
   });
 
-  const backToEvent = () => router.push(`/comunidade/eventos/${eventId}`);
+  const eventPath = validId ? `/eventos/${eventId}` : '/eventos';
+  const backToEvent = () => router.push(eventPath);
 
-  if (permLoading) return <p className="mt-8 text-sm text-gray-400">Carregando...</p>;
+  if (permLoading) return <p className="mt-8 text-base text-gray-600">Carregando...</p>;
 
   const forbidden = !canManageEvents || (error instanceof ApiError && error.status === 403);
   if (forbidden) {
     return (
       <>
-        <Header title="Confirmações de presença" description="" onBack={() => router.back()} />
-        <p className="mt-8 text-sm text-gray-600">
-          Você não tem permissão para ver as confirmações de presença deste evento.
+        <Header title="Quem vai" description="" onBack={backToEvent} />
+        <p role="alert" className="mt-8 text-base text-gray-800">
+          Acesso restrito. Só o Admin Geral e a Secretaria podem ver quem avisou que vai ao evento.
+        </p>
+      </>
+    );
+  }
+
+  if (!validId) {
+    return (
+      <>
+        <Header title="Quem vai" description="" onBack={() => router.push('/eventos')} />
+        <p role="alert" className="mt-8 text-base text-red-700">
+          Evento não encontrado. Volte para a lista de eventos e escolha de novo.
         </p>
       </>
     );
@@ -79,7 +91,9 @@ export default function ConfirmacoesPresencaPage() {
       setToDelete(null);
       if (wasLastOnPage) setPage((p) => Math.max(1, p - 1));
     } catch (err) {
-      setDeleteError(getFriendlyErrorMessage(err, 'Erro ao excluir confirmação.'));
+      setDeleteError(
+        getFriendlyErrorMessage(err, 'Não foi possível remover esta pessoa da lista. Tente de novo.'),
+      );
     }
   }
 
@@ -90,12 +104,12 @@ export default function ConfirmacoesPresencaPage() {
       render: (c) => <span className="font-medium text-gray-800">{c.name}</span>,
     },
     { key: 'contact', label: 'Contato', render: (c) => c.contact },
-    { key: 'createdAt', label: 'Confirmado em', render: (c) => formatDateTime(c.createdAt) },
+    { key: 'createdAt', label: 'Avisou em', render: (c) => formatDateTime(c.createdAt) },
   ];
 
   const actions: GenericTableAction<AttendanceConfirmation>[] = [
     {
-      label: 'Excluir',
+      label: 'Remover',
       variant: 'danger',
       onClick: (c) => {
         setDeleteError(null);
@@ -104,27 +118,40 @@ export default function ConfirmacoesPresencaPage() {
     },
   ];
 
+  const total = data?.total ?? 0;
+  const totalText = isLoading
+    ? 'Carregando a lista...'
+    : debouncedSearch
+      ? `${total} ${total === 1 ? 'resultado' : 'resultados'} para a busca`
+      : total === 0
+        ? 'Ninguém confirmou ainda.'
+        : `Total: ${total} ${total === 1 ? 'pessoa avisou' : 'pessoas avisaram'} que vai.`;
+
   return (
     <>
       <Header
-        title={`Confirmações de presença${data ? ` — ${data.event.name}` : ''}`}
-        description="Registro informativo: não reserva lugar (RN012)."
-        actions={[{ label: 'Voltar para o evento', onClick: backToEvent }]}
-        onBack={() => router.back()}
+        title={`Quem vai${data ? ` — ${data.event.name}` : ''}`}
+        description="Pessoas que avisaram pelo site que pretendem ir a este evento."
+        onBack={backToEvent}
       />
 
+      <div className="mt-6 max-w-2xl rounded-md bg-blue-50 px-3 py-2 text-base text-blue-900">
+        Isto é só um registro de quem avisou que quer ir. <strong>Não reserva lugar.</strong>
+      </div>
+
       {isError && (
-        <p className="mt-4 text-sm text-red-600">
-          {getFriendlyErrorMessage(error, 'Erro ao carregar confirmações.')}{' '}
-          <button onClick={() => refetch()} className="underline">
+        <div role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-base text-red-700">
+          {getFriendlyErrorMessage(
+            error,
+            'Não foi possível carregar a lista. Verifique a internet e tente de novo.',
+          )}{' '}
+          <button type="button" onClick={() => refetch()} className="font-medium underline">
             Tentar novamente
           </button>
-        </p>
+        </div>
       )}
 
-      <p className="mt-6 text-sm font-semibold text-gray-700">
-        {isLoading ? 'Confirmações' : `${data?.total ?? 0} confirmação(ões)`}
-      </p>
+      <p className="mt-6 text-base font-semibold text-gray-800">{totalText}</p>
 
       <div className="my-4">
         <GenericTable
@@ -133,8 +160,12 @@ export default function ConfirmacoesPresencaPage() {
           rowKey={(c) => c.id}
           actions={actions}
           isLoading={isLoading}
-          loadingMessage="Carregando confirmações..."
-          emptyMessage="Nenhuma confirmação de presença registrada para este evento."
+          loadingMessage="Carregando a lista... um instante."
+          emptyMessage={
+            debouncedSearch
+              ? 'Ninguém encontrado com essa busca. Tente outro nome ou contato.'
+              : 'Ninguém confirmou ainda. Quando alguém avisar pelo site que vai, o nome aparece aqui.'
+          }
           search={search}
           onSearchChange={(v) => {
             setSearch(v);
@@ -151,8 +182,8 @@ export default function ConfirmacoesPresencaPage() {
                 setPage(1);
               },
               options: [
-                { value: 'desc', label: 'Mais recentes' },
-                { value: 'asc', label: 'Mais antigas' },
+                { value: 'desc', label: 'Mais recentes primeiro' },
+                { value: 'asc', label: 'Mais antigas primeiro' },
               ],
             },
           ]}
@@ -165,29 +196,34 @@ export default function ConfirmacoesPresencaPage() {
       </div>
 
       {toDelete && (
-        <Modal open onClose={() => setToDelete(null)} title="Excluir confirmação">
-          <div className="flex flex-col gap-4 text-sm text-gray-700">
+        <Modal open onClose={() => setToDelete(null)} title="Remover da lista">
+          <div className="flex flex-col gap-4 text-base text-gray-800">
             <p>
-              Excluir a confirmação de <strong>{toDelete.name}</strong>? Os dados pessoais serão
-              apagados definitivamente (LGPD) e não podem ser recuperados.
+              Remover <strong>{toDelete.name}</strong> da lista? O nome e o contato serão apagados
+              para sempre e não dá para desfazer. Faça isso quando a pessoa pedir para ser removida.
             </p>
-            {deleteError && <p className="text-red-600">{deleteError}</p>}
+            {deleteError && (
+              <p role="alert" className="text-red-700">
+                {deleteError}
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 type="button"
+                autoFocus
                 onClick={() => setToDelete(null)}
                 disabled={deleteConfirmation.isPending}
-                className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200"
+                className="rounded-lg bg-gray-100 px-4 py-2.5 text-base font-medium hover:bg-gray-200 disabled:opacity-50"
               >
-                Cancelar
+                Voltar
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={deleteConfirmation.isPending}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                className="rounded-lg bg-red-600 px-4 py-2.5 text-base font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
-                {deleteConfirmation.isPending ? 'Excluindo...' : 'Excluir'}
+                {deleteConfirmation.isPending ? 'Removendo...' : 'Sim, remover'}
               </button>
             </div>
           </div>

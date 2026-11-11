@@ -20,6 +20,10 @@ interface ContentProps {
   onDeleted: () => void;
 }
 
+function plural(n: number, one: string, many: string) {
+  return n === 1 ? one : many;
+}
+
 /** Conteúdo reutilizável (dentro do EventFormModal ou do EventDeleteDialog). */
 export function EventDeleteContent({ event, onCancel, onDeleted }: ContentProps) {
   const deleteEvent = useDeleteEvent();
@@ -28,6 +32,7 @@ export function EventDeleteContent({ event, onCancel, onDeleted }: ContentProps)
 
   const attendance = event._count?.attendanceConfirmations;
   const albums = event.albums ?? [];
+  const albumTitles = albums.map((a) => `“${a.title}”`).join(', ');
 
   async function run(confirm: boolean) {
     setError(null);
@@ -39,75 +44,96 @@ export function EventDeleteContent({ event, onCancel, onDeleted }: ContentProps)
         setConflict(err);
         return;
       }
-      setError(getFriendlyErrorMessage(err, 'Erro ao remover evento.'));
+      setError(
+        getFriendlyErrorMessage(err, 'Não foi possível remover o evento. Tente de novo em instantes.'),
+      );
     }
   }
 
+  const attendanceLine =
+    attendance === undefined
+      ? 'A lista de quem avisou que vai também será apagada.'
+      : attendance > 0
+        ? `A lista de quem avisou que vai (${attendance} ${plural(attendance, 'pessoa', 'pessoas')}) também será apagada.`
+        : null;
+
+  const albumLine =
+    albums.length === 0
+      ? null
+      : albums.length === 1
+        ? `O álbum ${albumTitles} continua existindo, só deixa de estar ligado a este evento.`
+        : `Os álbuns ${albumTitles} continuam existindo, só deixam de estar ligados a este evento.`;
+
+  const scheduleCount = conflict?.schedules.length ?? 0;
+
   return (
-    <div className="flex flex-col gap-4 text-sm text-gray-700">
+    <div className="flex flex-col gap-4 text-base text-gray-800">
       {conflict ? (
         <>
-          <p className="font-medium text-red-700">{conflict.message}</p>
+          <p role="alert" className="font-semibold text-red-700">
+            Atenção: este evento tem{' '}
+            {scheduleCount > 0
+              ? `${scheduleCount} ${plural(scheduleCount, 'escala', 'escalas')}`
+              : 'escalas'}{' '}
+            (a lista de quem vai ajudar).
+          </p>
 
           {conflict.schedules.length > 0 && (
-            <div>
-              <p className="mb-1 font-medium">Escalas que serão removidas:</p>
-              <ul className="list-disc pl-5">
-                {conflict.schedules.map((s) => (
-                  <li key={s.id}>
-                    {s.pastoralGroup?.name ?? 'Sem pastoral'} — {s.assignmentsCount}{' '}
-                    {s.assignmentsCount === 1 ? 'atribuição' : 'atribuições'}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ul className="list-disc pl-5">
+              {conflict.schedules.map((s) => (
+                <li key={s.id}>
+                  {s.pastoralGroup?.name ?? 'Sem pastoral'} — {s.assignmentsCount}{' '}
+                  {plural(s.assignmentsCount, 'pessoa escalada', 'pessoas escaladas')}
+                </li>
+              ))}
+            </ul>
           )}
 
-          {conflict.linkedAlbums.length > 0 && (
-            <div>
-              <p className="mb-1 font-medium">Álbuns que serão desvinculados (não são apagados):</p>
-              <ul className="list-disc pl-5">
-                {conflict.linkedAlbums.map((a) => (
-                  <li key={a.id}>{a.title}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <p>
+            Se você continuar, as escalas e as pessoas escaladas serão apagadas
+            {attendance !== undefined && attendance > 0
+              ? `, junto com a lista de quem avisou que vai (${attendance} ${plural(attendance, 'pessoa', 'pessoas')})`
+              : ''}
+            . Isso não pode ser desfeito.
+          </p>
 
-          <p className="text-gray-500">
-            Prefere manter o histórico? Cancele o evento em vez de removê-lo.
+          {albumLine && <p>{albumLine}</p>}
+
+          <p className="text-gray-600">
+            Quer guardar o histórico? Clique em “Voltar” e use “Cancelar evento”: nada é apagado e dá
+            para reativar depois.
           </p>
         </>
       ) : (
         <>
           <p>
-            Remover o evento <strong>{event.name}</strong>?{' '}
-            {attendance !== undefined
-              ? `As ${attendance} confirmação(ões) de presença registradas também serão apagadas.`
-              : 'As confirmações de presença registradas também serão apagadas.'}{' '}
-            Esta ação não pode ser desfeita.
+            Remover o evento <strong>{event.name}</strong>? Ele será apagado para sempre.
           </p>
-          {albums.length > 0 && (
-            <p>
-              {albums.length === 1 ? 'O álbum' : 'Os álbuns'}{' '}
-              <strong>{albums.map((a) => a.title).join(', ')}</strong> ficará(ão) sem vínculo com
-              evento (não será(ão) apagado(s)).
-            </p>
-          )}
-          <p className="text-gray-500">
-            Se só quer tirar o evento do ar, use &quot;Cancelar evento&quot; (reversível).
+          <ul className="list-disc space-y-1 pl-5">
+            {attendanceLine && <li>{attendanceLine}</li>}
+            {albumLine && <li>{albumLine}</li>}
+            <li>Se houver escalas ligadas a este evento, vamos avisar antes de apagar.</li>
+          </ul>
+          <p className="text-gray-600">
+            Só quer tirar o evento do calendário e do site? Clique em “Voltar” e use “Cancelar
+            evento”: dá para reativar depois.
           </p>
         </>
       )}
 
-      {error && <p className="text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-red-700">
+          {error}
+        </p>
+      )}
 
       <div className="flex justify-end gap-2">
         <button
           type="button"
+          autoFocus
           onClick={onCancel}
           disabled={deleteEvent.isPending}
-          className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200"
+          className="rounded-lg bg-gray-100 px-4 py-2.5 text-base font-medium hover:bg-gray-200 disabled:opacity-50"
         >
           Voltar
         </button>
@@ -115,12 +141,12 @@ export function EventDeleteContent({ event, onCancel, onDeleted }: ContentProps)
           type="button"
           onClick={() => run(Boolean(conflict))}
           disabled={deleteEvent.isPending}
-          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="rounded-lg bg-red-600 px-4 py-2.5 text-base font-medium text-white hover:bg-red-700 disabled:opacity-50"
         >
           {deleteEvent.isPending
             ? 'Removendo...'
             : conflict
-              ? 'Remover mesmo assim'
+              ? 'Sim, remover tudo'
               : 'Remover evento'}
         </button>
       </div>
@@ -137,7 +163,7 @@ interface DialogProps {
 /** Diálogo standalone, usado pela lista e pela página de detalhe. */
 export default function EventDeleteDialog({ event, onClose, onDeleted }: DialogProps) {
   return (
-    <Modal open onClose={onClose} title="Remover Evento">
+    <Modal open onClose={onClose} title="Remover evento">
       <EventDeleteContent
         event={event}
         onCancel={onClose}

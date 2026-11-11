@@ -28,7 +28,7 @@ interface EventFormModalProps {
 }
 
 export default function EventFormModal({ open, onClose, eventId = null }: EventFormModalProps) {
-  const { canManageEvents } = usePermissions();
+  const { canManageEvents, isLoading: permLoading } = usePermissions();
   const isEditing = eventId !== null;
   const { data: event, isLoading, isError, error, refetch } = useEvent(open ? eventId : null);
   const [view, setView] = useState<'form' | 'delete'>('form');
@@ -40,36 +40,46 @@ export default function EventFormModal({ open, onClose, eventId = null }: EventF
     onClose();
   }
 
+  // Só decide leitura/edição depois que as permissões carregaram (evita "piscar" a tela errada).
   const title =
     view === 'delete'
-      ? 'Remover Evento'
+      ? 'Remover evento'
       : !isEditing
-        ? 'Novo Evento'
-        : canManageEvents
-          ? 'Editar Evento'
-          : 'Detalhes do Evento';
+        ? 'Novo evento'
+        : permLoading
+          ? 'Evento'
+          : canManageEvents
+            ? 'Editar evento'
+            : 'Detalhes do evento';
 
   return (
     <Modal open={open} onClose={handleClose} title={title}>
-      {isEditing && isLoading && <p className="text-sm text-gray-400">Carregando...</p>}
+      {(permLoading || (isEditing && isLoading)) && (
+        <p role="status" className="text-base text-gray-600">
+          Carregando...
+        </p>
+      )}
 
-      {isEditing && isError && (
+      {!permLoading && isEditing && isError && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-red-600">
-            {getFriendlyErrorMessage(error, 'Erro ao buscar evento.')}
+          <p role="alert" className="text-base text-red-700">
+            {getFriendlyErrorMessage(
+              error,
+              'Não foi possível abrir o evento. Verifique a internet e tente de novo.',
+            )}
           </p>
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={handleClose}
-              className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200"
+              className="rounded-lg bg-gray-100 px-4 py-2.5 text-base font-medium hover:bg-gray-200"
             >
               Fechar
             </button>
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg bg-[#1a4d8f] px-4 py-2 text-sm font-medium text-white hover:bg-[#153e73]"
+              className="rounded-lg bg-[#1a4d8f] px-4 py-2.5 text-base font-medium text-white hover:bg-[#153e73]"
             >
               Tentar novamente
             </button>
@@ -77,7 +87,7 @@ export default function EventFormModal({ open, onClose, eventId = null }: EventF
         </div>
       )}
 
-      {event && view === 'delete' && (
+      {!permLoading && event && view === 'delete' && canManageEvents && (
         <EventDeleteContent
           event={event}
           onCancel={() => setView('form')}
@@ -85,15 +95,18 @@ export default function EventFormModal({ open, onClose, eventId = null }: EventF
         />
       )}
 
-      {view === 'form' && !isEditing && canManageEvents && (
+      {!permLoading && view === 'form' && !isEditing && canManageEvents && (
         <EventModalForm key="new" event={null} onClose={handleClose} />
       )}
 
-      {view === 'form' && !isEditing && !canManageEvents && (
-        <p className="text-sm text-gray-600">Você não tem permissão para criar eventos.</p>
+      {!permLoading && view === 'form' && !isEditing && !canManageEvents && (
+        <p className="text-base text-gray-700">
+          Você não tem permissão para criar eventos. Peça para a Secretaria ou o Admin Geral
+          cadastrar.
+        </p>
       )}
 
-      {event && view === 'form' && (
+      {!permLoading && event && view === 'form' && (
         <EventModalForm
           key={event.id}
           event={event}
@@ -148,12 +161,26 @@ function EventModalForm({
       }
       onClose();
     } catch (err) {
-      setError(getEventSaveError(err, event ? 'Erro ao atualizar evento.' : 'Erro ao criar evento.'));
+      setError(
+        getEventSaveError(
+          err,
+          event
+            ? 'Não foi possível salvar as alterações. Tente de novo.'
+            : 'Não foi possível criar o evento. Tente de novo.',
+        ),
+      );
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {event?.status === 'CANCELLED' && (
+        <div role="status" className="rounded-md bg-amber-50 px-3 py-2 text-base text-amber-900">
+          Este evento está cancelado e não aparece no calendário nem no site.
+          {!readOnly && ' Para reativar, mude a situação para “Ativo” e salve.'}
+        </div>
+      )}
+
       <EventFormFields
         values={values}
         onChange={handleChange}
@@ -161,7 +188,11 @@ function EventModalForm({
         showStatus={Boolean(event) && !readOnly}
       />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-base text-red-700">
+          {error}
+        </p>
+      )}
 
       <div className="mt-2 flex items-center justify-between gap-2">
         {event && !readOnly ? (
@@ -169,7 +200,7 @@ function EventModalForm({
             type="button"
             onClick={onRequestDelete}
             disabled={pending}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            className="rounded-lg px-4 py-2.5 text-base font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
           >
             Remover evento
           </button>
@@ -181,7 +212,7 @@ function EventModalForm({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200"
+            className="rounded-lg bg-gray-100 px-4 py-2.5 text-base font-medium hover:bg-gray-200"
           >
             {readOnly ? 'Fechar' : 'Cancelar'}
           </button>
@@ -189,9 +220,9 @@ function EventModalForm({
             <button
               type="submit"
               disabled={pending}
-              className="rounded-lg bg-[#1a4d8f] px-4 py-2 text-sm font-medium text-white hover:bg-[#153e73] disabled:opacity-50"
+              className="rounded-lg bg-[#1a4d8f] px-4 py-2.5 text-base font-medium text-white hover:bg-[#153e73] disabled:opacity-50"
             >
-              {pending ? 'Salvando...' : event ? 'Salvar Alterações' : 'Criar Evento'}
+              {pending ? 'Salvando...' : event ? 'Salvar alterações' : 'Criar evento'}
             </button>
           )}
         </div>

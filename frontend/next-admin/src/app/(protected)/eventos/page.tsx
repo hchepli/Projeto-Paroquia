@@ -1,4 +1,4 @@
-// src/app/comunidade/eventos/page.tsx
+// src/app/(protected)/eventos/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -22,19 +22,22 @@ import { AdminEvent, EventStatus } from '@/types/events/events';
 
 type StatusFilter = 'ALL' | EventStatus;
 
+const LIST_PATH = '/eventos';
+
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('pt-BR');
+  const time = d
+    .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    .replace(':', 'h');
+  return `${date} às ${time}`;
 }
 
 export default function EventosPage() {
   const router = useRouter();
-  const { canManageEvents } = usePermissions();
+  const { canManageEvents, isLoading: permLoading } = usePermissions();
+  // Só mostra botões de gestão depois que as permissões carregaram.
+  const canManage = !permLoading && canManageEvents;
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -66,8 +69,8 @@ export default function EventosPage() {
     const cancelling = event.status === 'ACTIVE';
     const ok = window.confirm(
       cancelling
-        ? `Cancelar o evento "${event.name}"? Ele sai do calendário e do site, mas pode ser reativado.`
-        : `Reativar o evento "${event.name}"?`,
+        ? `Cancelar o evento "${event.name}"?\n\nEle deixa de aparecer no calendário e no site. Nada é apagado: você pode reativar quando quiser.`
+        : `Reativar o evento "${event.name}"?\n\nEle volta a aparecer no calendário e no site.`,
     );
     if (!ok) return;
 
@@ -78,7 +81,12 @@ export default function EventosPage() {
         status: cancelling ? 'CANCELLED' : 'ACTIVE',
       });
     } catch (err) {
-      setActionError(getFriendlyErrorMessage(err, 'Erro ao alterar o status do evento.'));
+      setActionError(
+        getFriendlyErrorMessage(
+          err,
+          'Não foi possível mudar a situação do evento. Tente de novo em instantes.',
+        ),
+      );
     }
   }
 
@@ -93,69 +101,85 @@ export default function EventosPage() {
       label: 'Nome',
       render: (event) => <span className="font-medium text-gray-800">{event.name}</span>,
     },
-    { key: 'date', label: 'Início', render: (event) => formatDateTime(event.startDate) },
+    { key: 'date', label: 'Quando', render: (event) => formatDateTime(event.startDate) },
     { key: 'location', label: 'Local', render: (event) => event.location },
     {
       key: 'status',
-      label: 'Status',
+      label: 'Situação',
       render: (event) => <EventStatusBadge status={event.status} />,
     },
-    ...(canManageEvents
-      ? [
-          {
-            key: 'confirmations',
-            label: 'Confirmações',
-            render: (event: AdminEvent) => event._count?.attendanceConfirmations ?? '—',
-          },
-        ]
-      : []),
   ];
+
+  if (canManage) {
+    columns.push({
+      key: 'confirmations',
+      label: 'Quem vai',
+      render: (event) => {
+        const n = event._count?.attendanceConfirmations;
+        return n === undefined ? '—' : `${n} ${n === 1 ? 'pessoa' : 'pessoas'}`;
+      },
+    });
+  }
 
   const actions: GenericTableAction<AdminEvent>[] = [
     {
-      label: canManageEvents ? 'Editar' : 'Ver',
-      onClick: (event) => router.push(`/comunidade/eventos/${event.id}`),
+      label: canManage ? 'Editar' : 'Ver',
+      onClick: (event) => router.push(`/eventos/${event.id}`),
     },
-    ...(canManageEvents
-      ? ([
-          {
-            label: 'Confirmações',
-            onClick: (event) => router.push(`/comunidade/eventos/${event.id}/confirmacoes`),
-          },
-          {
-            label: (event) => (event.status === 'ACTIVE' ? 'Cancelar evento' : 'Reativar'),
-            onClick: handleToggleStatus,
-            disabled: () => updateEvent.isPending,
-          },
-          {
-            label: 'Remover',
-            onClick: (event) => {
-              setActionError(null);
-              setDeleting(event);
-            },
-            variant: 'danger',
-          },
-        ] satisfies GenericTableAction<AdminEvent>[])
-      : []),
   ];
+
+  if (canManage) {
+    actions.push(
+      {
+        label: 'Ver quem vai',
+        onClick: (event) => router.push(`/eventos/${event.id}/confirmacoes`),
+      },
+      {
+        label: (event) => (event.status === 'ACTIVE' ? 'Cancelar evento' : 'Reativar evento'),
+        onClick: handleToggleStatus,
+        disabled: () => updateEvent.isPending,
+      },
+      {
+        label: 'Remover',
+        onClick: (event) => {
+          setActionError(null);
+          setDeleting(event);
+        },
+        variant: 'danger',
+      },
+    );
+  }
+
+  const hasFilter = Boolean(debouncedSearch) || statusFilter !== 'ALL';
+  const emptyMessage = hasFilter
+    ? 'Nenhum evento encontrado com essa busca. Tente outro nome ou clique em “Todos os eventos”.'
+    : canManage
+      ? 'Ainda não há eventos. Clique em “Novo evento” para cadastrar o primeiro.'
+      : 'Ainda não há eventos cadastrados.';
 
   return (
     <>
       <Header
         title="Eventos"
-        description="Gerencie os eventos da paróquia."
+        description="Veja e organize os eventos da paróquia."
         actions={
-          canManageEvents
-            ? [{ label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') }]
+          canManage
+            ? [
+                {
+                  label: 'Novo evento',
+                  onClick: () =>
+                    router.push(`/eventos/registrar?voltar=${encodeURIComponent(LIST_PATH)}`),
+                },
+              ]
             : []
         }
         onBack={() => router.back()}
       />
 
-      <div className="mt-8 grid grid-cols-3 gap-4">
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card
           icon={CalendarDays}
-          title="Todos"
+          title="Todos os eventos"
           value={allData?.total ?? '—'}
           onClick={() => changeStatusFilter('ALL')}
           active={statusFilter === 'ALL'}
@@ -177,14 +201,18 @@ export default function EventosPage() {
       </div>
 
       {(isError || actionError) && (
-        <p className="mt-4 text-sm text-red-600">
-          {actionError ?? getFriendlyErrorMessage(error, 'Erro ao carregar eventos.')}{' '}
-          {isError && (
-            <button onClick={() => refetch()} className="underline">
+        <div role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-base text-red-700">
+          {actionError ??
+            getFriendlyErrorMessage(
+              error,
+              'Não foi possível carregar os eventos. Verifique a internet e tente de novo.',
+            )}{' '}
+          {isError && !actionError && (
+            <button type="button" onClick={() => refetch()} className="font-medium underline">
               Tentar novamente
             </button>
           )}
-        </p>
+        </div>
       )}
 
       <div className="my-6">
@@ -193,23 +221,23 @@ export default function EventosPage() {
           items={items}
           rowKey={(event) => event.id}
           actions={actions}
-          isLoading={isLoading}
-          loadingMessage="Carregando eventos..."
-          emptyMessage="Nenhum evento encontrado."
+          isLoading={isLoading || permLoading}
+          loadingMessage="Carregando os eventos... um instante."
+          emptyMessage={emptyMessage}
           search={search}
           onSearchChange={(value) => {
             setSearch(value);
             setPage(1);
           }}
-          searchPlaceholder="Buscar por nome..."
+          searchPlaceholder="Buscar pelo nome do evento..."
           filters={[
             {
               key: 'status',
-              placeholder: 'Status',
+              placeholder: 'Situação',
               value: statusFilter,
               onChange: (v) => changeStatusFilter(v as StatusFilter),
               options: [
-                { value: 'ALL', label: 'Todos os status' },
+                { value: 'ALL', label: 'Todos os eventos' },
                 { value: 'ACTIVE', label: 'Ativos' },
                 { value: 'CANCELLED', label: 'Cancelados' },
               ],
