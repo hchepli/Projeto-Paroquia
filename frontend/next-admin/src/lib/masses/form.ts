@@ -42,12 +42,12 @@ export function massToFormValues(mass: MassDetail): MassFormValues {
 
 export function validateMassForm(values: MassFormValues): string | null {
   if (!values.title.trim() || !values.location.trim()) {
-    return 'Título e local são obrigatórios.';
+    return 'Preencha o título e o local.';
   }
   if (values.recurring) {
-    if (!values.time) return 'Preencha o horário.';
+    if (!values.time) return 'Escolha o horário.';
   } else if (!values.dateTime) {
-    return 'Preencha data e hora.';
+    return 'Escolha a data e a hora.';
   }
   return null;
 }

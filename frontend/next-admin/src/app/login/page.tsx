@@ -30,7 +30,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/painel');
+      router.push('/inicio');
       router.refresh();
     } catch {
       setError('Sem conexão com o servidor. Verifique sua internet e tente novamente.');

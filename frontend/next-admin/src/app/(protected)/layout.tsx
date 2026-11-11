@@ -1,13 +1,14 @@
-import Sidebar from '@/components/layout/Sidebar';
+// src/app/(protected)/layout.tsx
+import AppSidebar from '@/components/layout/AppSidebar';
 import Container from '@/components/layout/Container';
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar />
+      <AppSidebar />
 
       <Container style={{ width: '100%' }}>
-        <main style={{ flex: 1 }}>{children}</main>
+        <main>{children}</main>
       </Container>
     </div>
   );

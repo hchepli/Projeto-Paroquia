@@ -1,5 +1,5 @@
 // src/components/ui/cards/Card.tsx
-import { LucideIcon, ArrowUpRight  } from 'lucide-react';
+import { LucideIcon, ArrowUpRight } from 'lucide-react';
 
 interface CardProps {
   icon: LucideIcon;
@@ -10,6 +10,8 @@ interface CardProps {
   badgeColor?: 'green' | 'red' | 'yellow' | 'blue';
   onClick?: () => void;
   active?: boolean;
+  /** Texto do canto superior direito quando o card é clicável. */
+  actionLabel?: string;
 }
 
 const badgeColors: Record<NonNullable<CardProps['badgeColor']>, string> = {
@@ -28,6 +30,7 @@ export default function Card({
   badgeColor = 'blue',
   onClick,
   active = false,
+  actionLabel = 'Ver Mais',
 }: CardProps) {
   const isInteractive = Boolean(onClick);
 
@@ -36,10 +39,14 @@ export default function Card({
       onClick={onClick}
       role={isInteractive ? 'button' : undefined}
       tabIndex={isInteractive ? 0 : undefined}
+      aria-label={isInteractive ? `${title}: ${value}. ${actionLabel}` : undefined}
       onKeyDown={
         isInteractive
           ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') onClick?.();
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick?.();
+              }
             }
           : undefined
       }
@@ -49,8 +56,8 @@ export default function Card({
     >
       {isInteractive && (
         <span className="absolute top-4 right-4 flex items-center gap-0.5 text-xs font-medium text-[rgba(0,0,0,0.5)] whitespace-nowrap">
-          Ver Mais
-          <ArrowUpRight  width={14} />
+          {actionLabel}
+          <ArrowUpRight width={14} />
         </span>
       )}
 

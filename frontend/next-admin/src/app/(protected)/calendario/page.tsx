@@ -78,10 +78,10 @@ export default function CalendarioPage() {
 
   const headerActions = [
     ...(canManageMasses
-      ? [{ label: 'Nova Missa', onClick: () => router.push('/calendario/nova-missa') }]
+      ? [{ label: 'Nova Missa', onClick: () => router.push('/missas/nova-missa') }]
       : []),
     ...(canManageEvents
-      ? [{ label: 'Novo Evento', onClick: () => router.push('/comunidade/eventos/registrar') }]
+      ? [{ label: 'Novo Evento', onClick: () => router.push('/eventos/registrar') }]
       : []),
   ];
 

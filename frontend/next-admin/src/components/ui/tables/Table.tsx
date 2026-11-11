@@ -11,7 +11,7 @@ interface TableProps {
 function MessageRow({ text }: { text: string }) {
   return (
     <tr>
-      <td colSpan={4} className="py-6 text-center text-sm text-[rgba(0,0,0,0.4)]">
+      <td colSpan={4} className="py-6 text-center text-sm text-[rgba(0,0,0,0.5)]">
         {text}
       </td>
     </tr>
@@ -27,10 +27,10 @@ export default function Table({ title, items, forbidden, isLoading, isError }: T
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-white z-10">
             <tr className="text-left text-sm text-[rgba(0,0,0,0.5)]">
-              <th className="font-normal py-2 pr-4">Data</th>
-              <th className="font-normal py-2 pr-4">Descrição</th>
-              <th className="font-normal py-2 pr-4">Tipo</th>
-              <th className="font-normal py-2">Usuário</th>
+              <th className="font-normal py-2 pr-4">Quando</th>
+              <th className="font-normal py-2 pr-4">O que mudou</th>
+              <th className="font-normal py-2 pr-4">Ação</th>
+              <th className="font-normal py-2">Quem fez</th>
             </tr>
           </thead>
           <tbody>
@@ -39,9 +39,9 @@ export default function Table({ title, items, forbidden, isLoading, isError }: T
             ) : isLoading ? (
               <MessageRow text="Carregando..." />
             ) : isError ? (
-              <MessageRow text="Não foi possível carregar as movimentações." />
+              <MessageRow text="Não foi possível carregar as alterações. Tente novamente em instantes." />
             ) : items.length === 0 ? (
-              <MessageRow text="Nenhuma movimentação registrada." />
+              <MessageRow text="Ainda não há alterações." />
             ) : (
               items.map((item) => (
                 <tr key={item.id} className="border-t border-[rgba(0,0,0,0.08)] text-sm">
@@ -62,7 +62,7 @@ export default function Table({ title, items, forbidden, isLoading, isError }: T
           scrollbar-color: rgba(0, 0, 0, 0.5) transparent;
         }
         .movimentacoes-scroll::-webkit-scrollbar {
-          width: 1px;
+          width: 6px;
           height: 6px;
         }
         .movimentacoes-scroll::-webkit-scrollbar-track {

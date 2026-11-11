@@ -131,10 +131,11 @@ export default function MissasRecorrentesPage() {
       <Header
         title="Missas Recorrentes"
         description="Gerencie as missas que se repetem semanalmente."
+        onBack={() => router.back()}
         actions={[
           {
             label: 'Adicionar Missa',
-            onClick: () => router.push('/calendario/nova-missa?recorrente=1'),
+            onClick: () => router.push('/missas/nova-missa?recorrente=1'),
           },
         ]}
       />

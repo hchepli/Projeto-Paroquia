@@ -1,3 +1,4 @@
+// src/components/ui/nav/NavLink.tsx
 'use client';
 
 import Link from 'next/link';
@@ -19,6 +20,9 @@ export default function NavLink({ item, active, collapsed }: NavLinkProps) {
   return (
     <Link
       href={item.href}
+      aria-current={active ? 'page' : undefined}
+      aria-label={collapsed ? item.label : undefined}
+      title={collapsed ? item.label : undefined}
       className={`group relative mb-1 flex items-center gap-3 rounded-xl px-3.5 py-4 text-sm no-underline border-l-[3px] ${
         collapsed ? 'justify-center' : 'justify-start'
       } ${

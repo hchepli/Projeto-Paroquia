@@ -1,20 +1,20 @@
 import { AuditLog, AuditAction } from '@/types/audit-logs/audit-logs';
 
 const ACTION_LABEL: Record<AuditAction, string> = {
-  CREATE: 'Criação',
-  UPDATE: 'Edição',
-  DELETE: 'Remoção',
+  CREATE: 'Criou',
+  UPDATE: 'Alterou',
+  DELETE: 'Apagou',
 };
 
 const ENTITY_LABEL: Record<string, string> = {
   Mass: 'Missa',
-  MassTemplate: 'Missa recorrente',
+  MassTemplate: 'Missa que se repete',
   Event: 'Evento',
-  Announcement: 'Comunicado',
+  Announcement: 'Aviso',
   Schedule: 'Escala',
-  ScheduleAssignment: 'Atribuição de escala',
+  ScheduleAssignment: 'Pessoa na escala',
   User: 'Usuário',
-  Role: 'Cargo',
+  Role: 'Função',
   Permission: 'Permissão',
   Volunteer: 'Voluntário',
   PastoralGroup: 'Pastoral',
@@ -33,14 +33,13 @@ export interface MovimentacaoRow {
 }
 
 export function mapAuditLogToRow(log: AuditLog): MovimentacaoRow {
-  const entity = ENTITY_LABEL[log.entity] ?? log.entity;
   return {
     id: log.id,
     data: new Date(log.createdAt).toLocaleString('pt-BR', {
       dateStyle: 'short',
       timeStyle: 'short',
     }),
-    descricao: `${ACTION_LABEL[log.action]} de ${entity}`,
+    descricao: ENTITY_LABEL[log.entity] ?? log.entity,
     tipo: ACTION_LABEL[log.action],
     usuario: log.user?.name ?? 'Sistema',
   };

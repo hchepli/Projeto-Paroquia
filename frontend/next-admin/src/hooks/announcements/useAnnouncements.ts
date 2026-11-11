@@ -23,10 +23,11 @@ async function fetchAnnouncements(
   return res.json();
 }
 
-export function useAnnouncements(params: UseAnnouncementsParams = {}) {
+export function useAnnouncements(params: UseAnnouncementsParams = {}, enabled = true) {
   return useQuery({
     queryKey: ['announcements', 'list', params],
     queryFn: () => fetchAnnouncements(params),
-    placeholderData: keepPreviousData, // sem "piscar" ao paginar/buscar
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }

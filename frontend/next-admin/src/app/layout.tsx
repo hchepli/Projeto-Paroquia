@@ -1,7 +1,9 @@
+// src/app/layout.tsx
 import type { Metadata } from 'next';
 import { Poppins } from 'next/font/google';
 import '@/styles/globals.css';
 import { Providers } from './providers';
+import { APP_META } from '@/config/brand';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -11,8 +13,8 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: 'Portal Paroquial',
-  description: 'Painel administrativo da Paróquia Divino Espírito Santo',
+  title: APP_META.title,
+  description: APP_META.description,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

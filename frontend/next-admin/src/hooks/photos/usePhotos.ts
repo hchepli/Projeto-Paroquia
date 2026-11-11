@@ -11,10 +11,10 @@ async function fetchPhotos(albumId?: number): Promise<Photo[]> {
 }
 
 // Passe sempre o albumId. Sem argumento carrega TODAS as fotos (evitar em telas de lista).
-export function usePhotos(albumId?: number) {
+export function usePhotos(albumId?: number, enabled = true) {
   return useQuery({
     queryKey: ['photos', { albumId: albumId ?? null }],
     queryFn: () => fetchPhotos(albumId),
-    enabled: albumId === undefined || (Number.isInteger(albumId) && albumId > 0),
+    enabled: enabled && (albumId === undefined || (Number.isInteger(albumId) && albumId > 0)),
   });
 }

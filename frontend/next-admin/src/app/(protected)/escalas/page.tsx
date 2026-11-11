@@ -30,7 +30,7 @@ export default function EscalasPage() {
   const [search, setSearch] = useState('');
   const [showPending, setShowPending] = useState(false);
 
-  const isCoordenador = currentUser?.role.name === COORDENADOR_ROLE;
+  const isCoordenador = currentUser?.role?.name === COORDENADOR_ROLE;
   const effectivePastoralGroupId = isCoordenador ? undefined : (selectedPastoralGroupId ?? undefined);
 
   const monthRange = getCurrentMonthRange();

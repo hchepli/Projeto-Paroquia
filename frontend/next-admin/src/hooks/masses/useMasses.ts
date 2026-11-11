@@ -1,8 +1,9 @@
 // src/hooks/masses/useMasses.ts
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Mass } from '@/types/masses/masses';
+import { throwApiError } from '@/lib/errors';
 
-interface PaginatedResult<T> {
+export interface PaginatedResult<T> {
   data: T[];
   total: number;
   page: number;
@@ -14,6 +15,8 @@ export interface UseMassesParams {
   page?: number;
   limit?: number;
   search?: string;
+  sortBy?: string;
+  order?: 'asc' | 'desc';
   startDate?: string;
   endDate?: string;
 }
@@ -24,8 +27,9 @@ async function fetchMasses(params: UseMassesParams = {}): Promise<PaginatedResul
     if (value !== undefined && value !== '') query.set(key, String(value));
   });
 
-  const res = await fetch(`/api/masses?${query.toString()}`);
-  if (!res.ok) throw new Error('Erro ao buscar missas.');
+  const qs = query.toString();
+  const res = await fetch(`/api/masses${qs ? `?${qs}` : ''}`);
+  if (!res.ok) await throwApiError(res, 'Erro ao buscar missas.');
   return res.json();
 }
 
@@ -33,5 +37,7 @@ export function useMasses(params: UseMassesParams = {}) {
   return useQuery({
     queryKey: ['masses', params],
     queryFn: () => fetchMasses(params),
+    // Trocar de página/filtro mantém a lista anterior até chegar a nova.
+    placeholderData: keepPreviousData,
   });
 }

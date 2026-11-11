@@ -2,16 +2,28 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { LucideIcon, Plus } from 'lucide-react';
+import { ChevronRight, ChevronDown, LucideIcon, Plus } from 'lucide-react';
+
+export type ActionKind = 'create' | 'menu' | 'navigate';
 
 export interface HeaderAction {
   label: string;
   onClick?: () => void;
   href?: string;
   variant?: 'primary' | 'secondary';
-  icon?: LucideIcon; // opcional, default Plus (mantém comportamento atual)
-  iconPosition?: 'left' | 'right'; // default 'left', igual já era
+  /** create = "+" à esquerda | menu = seta para baixo à direita | navigate = seta de link à direita. Padrão: create. */
+  kind?: ActionKind;
+  /** Sobrescreve o ícone do `kind`. */
+  icon?: LucideIcon;
+  /** Sobrescreve a posição do `kind`. */
+  iconPosition?: 'left' | 'right';
 }
+
+const KIND_CONFIG: Record<ActionKind, { icon: LucideIcon; position: 'left' | 'right' }> = {
+  create: { icon: Plus, position: 'left' },
+  menu: { icon: ChevronDown, position: 'right' },
+  navigate: { icon: ChevronRight, position: 'right' },
+};
 
 interface ActionButtonProps {
   action: HeaderAction;
@@ -21,8 +33,9 @@ export default function ActionButton({ action }: ActionButtonProps) {
   const [phase, setPhase] = useState<'idle' | 'entering' | 'leaving'>('idle');
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const Icon = action.icon ?? Plus;
-  const iconPosition = action.iconPosition ?? 'left';
+  const config = KIND_CONFIG[action.kind ?? 'create'];
+  const Icon = action.icon ?? config.icon;
+  const iconPosition = action.iconPosition ?? config.position;
 
   function handleEnter() {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -44,8 +57,10 @@ export default function ActionButton({ action }: ActionButtonProps) {
 
   const isFilled = phase === 'entering';
 
-  const baseClasses =
-    'group relative overflow-hidden flex items-center gap-4 rounded-md pl-3 pr-4 py-3 text-sm font-medium cursor-pointer border border-[#00000070] bg-white text-[#000000d2]';
+  // Ícone à direita: mais espaço à esquerda e menos à direita, para o ícone ficar no canto.
+  const paddingClasses = iconPosition === 'right' ? 'pl-4 pr-3' : 'pl-3 pr-4';
+
+  const baseClasses = `group relative overflow-hidden flex items-center gap-4 rounded-md ${paddingClasses} py-3 text-sm font-medium cursor-pointer border border-[#00000070] bg-white text-[#000000d2]`;
 
   const fill = (
     <span
@@ -60,6 +75,7 @@ export default function ActionButton({ action }: ActionButtonProps) {
   const iconEl = (
     <Icon
       size={24}
+      aria-hidden="true"
       className={`relative z-10 transition-colors duration-300 ease-in-out ${isFilled ? 'text-white' : ''}`}
     />
   );
@@ -98,7 +114,7 @@ export default function ActionButton({ action }: ActionButtonProps) {
   }
 
   return (
-    <button onClick={action.onClick} className={baseClasses} {...sharedProps}>
+    <button type="button" onClick={action.onClick} className={baseClasses} {...sharedProps}>
       {fill}
       {content}
     </button>
