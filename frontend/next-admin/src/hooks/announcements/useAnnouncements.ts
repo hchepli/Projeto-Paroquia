@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { throwApiError } from '@/lib/errors';
 import { Announcement, AnnouncementStatus } from '@/types/announcements/announcement';
 import { PaginatedResult } from '@/types/pagination';
 
@@ -19,7 +20,7 @@ async function fetchAnnouncements(
   if (params.status) searchParams.set('status', params.status);
 
   const res = await fetch(`/api/announcements?${searchParams.toString()}`);
-  if (!res.ok) throw new Error('Erro ao buscar comunicados.');
+  if (!res.ok) await throwApiError(res, 'Não foi possível carregar os avisos.');
   return res.json();
 }
 

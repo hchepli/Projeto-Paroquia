@@ -1,122 +1,53 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
-import TextInput from '@/components/ui/inputs/TextInput';
-import TextareaInput from '@/components/ui/inputs/TextareaInput';
-import SelectInput from '@/components/ui/inputs/SelectInput';
-import FormActions from '@/components/ui/buttons/FormActions';
-import { useAnnouncementCategories } from '@/hooks/categories/useCategories';
+import AnnouncementForm from '@/components/ui/forms/AnnouncementForm';
+import { usePermissions } from '@/hooks/auth/usePermissions';
+import { EMPTY_ANNOUNCEMENT_FORM } from '@/lib/announcements/form';
 
-export default function RegistrarComunicadoPage() {
+function safeBackPath(value: string | null, fallback: string) {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : fallback;
+}
+
+function NovoAvisoContent() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { data: categories } = useAnnouncementCategories();
-
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('PUBLISHED');
-  const [imageUrl, setImageUrl] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (submitting) return;
-    setError(null);
-
-    if (!title.trim() || !content.trim()) {
-      setError('Preencha título e conteúdo.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const response = await fetch('/api/announcements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          content: content.trim(),
-          categoryId: categoryId ? Number(categoryId) : undefined,
-          status,
-          imageUrl: imageUrl.trim() || undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        const message = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
-        throw new Error(message ?? 'Erro ao criar comunicado.');
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ['announcements'] });
-      router.push('/comunidade/comunicados');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar comunicado.');
-      setSubmitting(false); // em sucesso mantém travado até a navegação
-    }
-  }
+  const searchParams = useSearchParams();
+  const { canManageAnnouncements, isLoading } = usePermissions();
+  const backPath = safeBackPath(searchParams.get('voltar'), '/avisos');
 
   return (
     <>
       <Header
-        title="Registrar Comunicado"
-        description="Crie um novo comunicado para a comunidade."
-        onBack={() => router.back()}
+        title="Registrar aviso"
+        description="Escreva um aviso para a comunidade."
+        onBack={() => router.push(backPath)}
       />
 
       <div className="py-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <TextInput
-            label="Título"
-            value={title}
-            onChange={setTitle}
-            placeholder="Atenção: os horários..."
-            required
+        {isLoading ? (
+          <p className="text-sm text-[rgba(0,0,0,0.5)]">Carregando...</p>
+        ) : !canManageAnnouncements ? (
+          <p className="text-sm text-[rgba(0,0,0,0.7)]" role="alert">
+            Você não tem permissão para criar avisos. Fale com o Admin Geral ou com a Secretaria.
+          </p>
+        ) : (
+          <AnnouncementForm
+            mode="create"
+            initialValues={EMPTY_ANNOUNCEMENT_FORM}
+            backPath={backPath}
           />
-
-          <TextareaInput label="Conteúdo" value={content} onChange={setContent} rows={6} required />
-
-          <SelectInput
-            label="Categoria"
-            value={categoryId}
-            onChange={setCategoryId}
-            placeholder="Nenhuma"
-            options={(categories ?? []).map((c) => ({ value: String(c.id), label: c.name }))}
-          />
-
-          <TextInput
-            label="Imagem (URL, opcional)"
-            value={imageUrl}
-            onChange={setImageUrl}
-            placeholder="https://res.cloudinary.com/..."
-          />
-
-          <SelectInput
-            label="Status"
-            value={status}
-            onChange={(v) => setStatus(v as 'DRAFT' | 'PUBLISHED')}
-            placeholder="Selecione o status"
-            required
-            options={[
-              { value: 'PUBLISHED', label: 'Publicado' },
-              { value: 'DRAFT', label: 'Rascunho (oculto)' },
-            ]}
-          />
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <FormActions
-            onCancel={() => router.back()}
-            submitLabel="Criar Comunicado"
-            submitting={submitting}
-          />
-        </form>
+        )}
       </div>
     </>
+  );
+}
+
+export default function NovoAvisoPage() {
+  return (
+    <Suspense fallback={null}>
+      <NovoAvisoContent />
+    </Suspense>
   );
 }

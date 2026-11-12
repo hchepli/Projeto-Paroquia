@@ -3,6 +3,25 @@ import { apiFetch } from '@/lib/api';
 
 type Ctx = { params: Promise<{ id: string }> };
 
+export async function GET(req: NextRequest, { params }: Ctx) {
+  const token = req.cookies.get('access_token')?.value;
+  if (!token) {
+    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const backendRes = await apiFetch(`/announcements/admin/${id}`, { token });
+  const data = await backendRes.json().catch(() => null);
+
+  if (!backendRes.ok) {
+    return NextResponse.json(
+      { message: data?.message ?? 'Erro ao buscar aviso.' },
+      { status: backendRes.status },
+    );
+  }
+  return NextResponse.json(data);
+}
+
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const token = req.cookies.get('access_token')?.value;
   if (!token) {
@@ -25,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const data = await backendRes.json().catch(() => null);
   if (!backendRes.ok) {
     return NextResponse.json(
-      { message: data?.message ?? 'Erro ao atualizar comunicado.' },
+      { message: data?.message ?? 'Erro ao atualizar aviso.' },
       { status: backendRes.status },
     );
   }
@@ -44,7 +63,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
 
   if (!backendRes.ok) {
     return NextResponse.json(
-      { message: data?.message ?? 'Erro ao remover comunicado.' },
+      { message: data?.message ?? 'Erro ao apagar aviso.' },
       { status: backendRes.status },
     );
   }
