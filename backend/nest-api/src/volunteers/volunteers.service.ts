@@ -84,7 +84,7 @@ export class VolunteersService {
       !this.ownsPastoral(user, dto.pastoralGroupId)
     ) {
       throw new ForbiddenException(
-        'Você só pode cadastrar Voluntários para a sua própria Pastoral (RN006).',
+        'Você só pode cadastrar voluntários para a sua própria pastoral.',
       );
     }
     await this.assertPastoralExists(dto.pastoralGroupId);
@@ -141,7 +141,7 @@ export class VolunteersService {
     if (moveTo !== undefined) {
       if (this.isCoordinator(user)) {
         throw new ForbiddenException(
-          'Você não pode mover um Voluntário para outra Pastoral (RN006).',
+          'Você não pode mudar um voluntário para outra pastoral.',
         );
       }
       await this.assertPastoralExists(moveTo);
