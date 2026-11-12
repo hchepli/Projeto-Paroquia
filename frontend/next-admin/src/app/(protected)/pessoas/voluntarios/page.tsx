@@ -12,6 +12,7 @@ import { useDeleteVolunteer } from '@/hooks/volunteers/useVolunteerMutations';
 import { Volunteer } from '@/types/volunteers/volunteer';
 import { ROLE_NAMES } from '@/lib/constants/role-names';
 import { ApiError, errorMessage } from '@/lib/api-error';
+import { VolunteerAssignment, describeAssignments } from '@/lib/volunteer-assignments';
 
 const columns: GenericTableColumn<Volunteer>[] = [
   { key: 'name', label: 'Nome', render: (v) => v.name },
@@ -20,16 +21,13 @@ const columns: GenericTableColumn<Volunteer>[] = [
   { key: 'pastoral', label: 'Pastoral', render: (v) => v.pastoralGroup?.name ?? '—' },
 ];
 
-interface AffectedAssignment {
-  title: string;
-  role: string;
-  date: string | null;
-}
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 export default function VoluntariosPage() {
   const router = useRouter();
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  const isCoordenador = currentUser?.role.name === ROLE_NAMES.COORDENADOR;
+  const isCoordenador = currentUser?.role?.name === ROLE_NAMES.COORDENADOR;
+  const coordenadorSemPastoral = isCoordenador && !currentUser?.pastoralGroup;
 
   const { data: volunteers = [], isLoading, error: loadError } = useVolunteers();
   const { data: pastoralGroups = [] } = usePastoralGroups({ enabled: !!currentUser && !isCoordenador });
@@ -55,37 +53,64 @@ export default function VoluntariosPage() {
     try {
       await removeVolunteer({ id: volunteer.id });
     } catch (err) {
-      // UC009: 409 com a lista de escalas afetadas, pede confirmação extra
+      // UC009: o back responde 409 com as escalas em que a pessoa está e pede confirmação extra
       if (err instanceof ApiError && err.status === 409 && err.body?.requiresConfirmation) {
-        const lines = (err.body.assignments as AffectedAssignment[])
-          .slice(0, 10)
-          .map((a) => `• ${a.title}${a.date ? ` — ${new Date(a.date).toLocaleDateString('pt-BR')}` : ''} (${a.role})`)
-          .join('\n');
+        const all = (err.body.assignments ?? []) as VolunteerAssignment[];
+        const future = all.filter((a) => a.isFuture);
+        const pastCount = all.length - future.length;
 
-        if (window.confirm(`${err.message}\n\n${lines}\n\nRemover mesmo assim?`)) {
+        const parts: string[] = [];
+        if (future.length > 0) {
+          parts.push(
+            `${volunteer.name} está em ${future.length} ${plural(
+              future.length,
+              'escala que ainda vai acontecer',
+              'escalas que ainda vão acontecer',
+            )}:\n\n${describeAssignments(future)}`,
+          );
+        }
+        if (pastCount > 0) {
+          parts.push(
+            `Também aparece em ${pastCount} ${plural(pastCount, 'escala antiga', 'escalas antigas')}.`,
+          );
+        }
+        parts.push(`Se você remover, ${volunteer.name} sai dessas escalas.\n\nRemover mesmo assim?`);
+
+        if (window.confirm(parts.join('\n\n'))) {
           try {
             await removeVolunteer({ id: volunteer.id, confirm: true });
           } catch (err2) {
-            setActionError(errorMessage(err2, 'Erro ao remover voluntário.'));
+            setActionError(errorMessage(err2, 'Não foi possível remover. Tente de novo.'));
           }
         }
         return;
       }
-      setActionError(errorMessage(err, 'Erro ao remover voluntário.'));
+      setActionError(errorMessage(err, 'Não foi possível remover. Tente de novo.'));
     }
   }
+
+  const hasFilter = search.trim() !== '' || pastoralFilter !== '';
+  const emptyMessage = coordenadorSemPastoral
+    ? 'Seu acesso ainda não está ligado a uma pastoral. Peça ao administrador para ligar.'
+    : hasFilter
+      ? 'Nenhum voluntário encontrado. Tente buscar com outras palavras.'
+      : 'Ainda não há voluntários cadastrados. Use o botão "Cadastrar voluntário".';
 
   return (
     <>
       <Header
         title={isCoordenador ? `Voluntários de ${currentUser?.pastoralGroup?.name ?? '—'}` : 'Voluntários'}
-        description="Pessoas que podem ser escaladas em Missas e Eventos."
-        actions={[{ label: 'Registrar Voluntário', onClick: () => router.push('/voluntario/registrar') }]}
+        description="Pessoas que ajudam nas missas e eventos e podem ser colocadas na escala."
+        actions={
+          coordenadorSemPastoral
+            ? []
+            : [{ label: 'Cadastrar voluntário', onClick: () => router.push('/pessoas/voluntarios/registrar') }]
+        }
       />
 
       {(loadError || actionError) && (
-        <p role="alert" className="mt-4 text-sm text-red-600">
-          {actionError ?? errorMessage(loadError, 'Erro ao buscar voluntários.')}
+        <p role="alert" className="mt-4 whitespace-pre-line text-base text-red-600">
+          {actionError ?? errorMessage(loadError, 'Não foi possível carregar os voluntários. Tente de novo em instantes.')}
         </p>
       )}
 
@@ -95,7 +120,7 @@ export default function VoluntariosPage() {
           items={items}
           rowKey={(v) => v.id}
           isLoading={isLoading || userLoading}
-          emptyMessage="Nenhum voluntário encontrado."
+          emptyMessage={emptyMessage}
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Buscar por nome, telefone ou e-mail..."
@@ -116,7 +141,7 @@ export default function VoluntariosPage() {
                 ]
           }
           actions={[
-            { label: 'Editar', onClick: (v) => router.push(`/voluntario/${v.id}/editar`) },
+            { label: 'Editar', onClick: (v) => router.push(`/pessoas/voluntarios/${v.id}/editar`) },
             { label: 'Remover', variant: 'danger', onClick: handleDelete },
           ]}
         />

@@ -1,4 +1,3 @@
-// src/components/ui/inputs/MassSearchCombobox.tsx
 'use client';
 
 import { useRef, useState } from 'react';
@@ -11,9 +10,11 @@ import { Mass } from '@/types/masses/masses';
 interface MassSearchComboboxProps {
   value: string; // massId como string, '' = nenhuma
   onChange: (massId: string) => void;
+  /** Rótulo da missa já ligada (ex: event.mass ao editar). Use formatMassLabel(event.mass). */
+  initialLabel?: string;
 }
 
-function formatMassLabel(mass: Mass): string {
+export function formatMassLabel(mass: Pick<Mass, 'title' | 'dateTime'>): string {
   const date = new Date(mass.dateTime);
   const day = date.toLocaleDateString('pt-BR');
   const time = date
@@ -22,7 +23,7 @@ function formatMassLabel(mass: Mass): string {
   return `${mass.title}, ${day} às ${time}`;
 }
 
-export default function MassSearchCombobox({ value, onChange }: MassSearchComboboxProps) {
+export default function MassSearchCombobox({ value, onChange, initialLabel }: MassSearchComboboxProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState('');
@@ -52,6 +53,7 @@ export default function MassSearchCombobox({ value, onChange }: MassSearchCombob
   }
 
   const showClear = value !== '';
+  const shownLabel = selectedLabel || initialLabel || '';
 
   return (
     <div className="relative" ref={ref}>
@@ -61,14 +63,18 @@ export default function MassSearchCombobox({ value, onChange }: MassSearchCombob
           className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
         />
         <input
-          value={showClear ? selectedLabel : query}
+          value={showClear ? shownLabel : query}
           onChange={(e) => {
             setQuery(e.target.value);
             setOpen(true);
-            if (showClear) onChange(''); // digitar de novo desfaz a seleção atual
+            if (showClear) {
+              onChange(''); // digitar de novo desfaz a seleção atual
+              setSelectedLabel('');
+            }
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Buscar Missa por título..."
+          placeholder="Buscar missa pelo nome..."
+          aria-label="Buscar missa"
           className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-8 text-sm outline-none focus:border-[#1a4d8f]"
         />
         {showClear && (
@@ -76,7 +82,7 @@ export default function MassSearchCombobox({ value, onChange }: MassSearchCombob
             type="button"
             onClick={handleClear}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            aria-label="Limpar seleção"
+            aria-label="Limpar a missa escolhida"
           >
             <X size={16} />
           </button>

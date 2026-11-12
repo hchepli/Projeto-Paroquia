@@ -26,7 +26,7 @@ export function useCreatePastoralGroup() {
 }
 
 export function useUpdatePastoralGroup(id: number) {
-  const invalidate = useInvalidate();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: PastoralGroupInput): Promise<PastoralGroup> => {
       const res = await fetch(`/api/pastoral-groups/${id}`, {
@@ -37,7 +37,11 @@ export function useUpdatePastoralGroup(id: number) {
       if (!res.ok) throw await parseApiError(res, 'Erro ao atualizar pastoral.');
       return res.json();
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pastoral-groups'] });
+      // A lista de voluntários mostra o nome da pastoral (pastoralGroup.name)
+      queryClient.invalidateQueries({ queryKey: ['volunteers'] });
+    },
   });
 }
 

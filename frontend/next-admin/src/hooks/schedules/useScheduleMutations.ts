@@ -15,7 +15,9 @@ async function send<T>(url: string, method: string, body: unknown, fallback: str
     ...(body !== undefined && { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   });
   if (!res.ok) throw await parseApiError(res, fallback);
-  return res.json();
+  // Corpo vazio (ex: DELETE sem retorno) não pode virar erro depois de dar certo.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }
 
 export function useDeleteSchedule() {
