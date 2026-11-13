@@ -153,7 +153,7 @@ function AvisosContent() {
 
   const headerActions: HeaderAction[] = [
     {
-      label: 'Novo aviso',
+      label: 'Registrar aviso',
       onClick: () => router.push(`${NEW_ANNOUNCEMENT_PATH}${back}`),
     },
   ];

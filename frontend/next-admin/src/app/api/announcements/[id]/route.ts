@@ -29,17 +29,31 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
 
   const { id } = await params;
-  const body = await req.json().catch(() => null);
-  if (!body) {
-    return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-  }
+  const isMultipart = (req.headers.get('content-type') ?? '').includes('multipart/form-data');
 
-  const backendRes = await apiFetch(`/announcements/${id}`, {
-    token,
-    method: 'PATCH',
-    body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  let backendRes: Response;
+  if (isMultipart) {
+    const incomingForm = await req.formData().catch(() => null);
+    if (!incomingForm) {
+      return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
+    }
+    backendRes = await apiFetch(`/announcements/${id}`, {
+      token,
+      method: 'PATCH',
+      body: incomingForm,
+    });
+  } else {
+    const body = await req.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
+    }
+    backendRes = await apiFetch(`/announcements/${id}`, {
+      token,
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   const data = await backendRes.json().catch(() => null);
   if (!backendRes.ok) {

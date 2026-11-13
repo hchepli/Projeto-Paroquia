@@ -27,23 +27,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => null);
-  if (!body) {
+  const incomingForm = await req.formData().catch(() => null);
+  if (!incomingForm) {
     return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
   }
 
   const backendRes = await apiFetch('/announcements', {
     token,
     method: 'POST',
-    body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
+    body: incomingForm,
   });
 
   const data = await backendRes.json().catch(() => null);
 
   if (!backendRes.ok) {
     return NextResponse.json(
-      { message: data?.message ?? 'Erro ao criar comunicado.' },
+      { message: data?.message ?? 'Erro ao criar aviso.' },
       { status: backendRes.status },
     );
   }

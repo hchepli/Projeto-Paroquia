@@ -1,12 +1,13 @@
 // src/app/comunidade/albuns/[id]/page.tsx
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { Star, Trash2, Upload } from 'lucide-react';
+import { Star, Trash2 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import AlbumForm, { AlbumFormValues } from '@/components/ui/forms/AlbumForm';
+import ImageInput from '@/components/ui/inputs/ImageInput';
 import { useAlbum } from '@/hooks/albums/useAlbum';
 import { useUpdateAlbum } from '@/hooks/albums/useUpdateAlbum';
 import { usePhotos } from '@/hooks/photos/usePhotos';
@@ -44,7 +45,6 @@ export default function AlbumDetailPage() {
   const setCover = useSetCoverPhoto();
   const deletePhoto = useDeletePhoto();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1');
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export default function AlbumDetailPage() {
   if (!validId || isError || (!albumLoading && !album)) {
     return (
       <>
-        <Header title="Álbum" onBack={() => router.push('/comunidade/albuns')} />
+        <Header title="Álbum" onBack={() => router.push('/albuns')} />
         <p className="mt-6 text-sm text-red-600">
           {!validId
             ? 'Álbum inválido.'
@@ -100,9 +100,8 @@ export default function AlbumDetailPage() {
   }
 
   // UC028 — rejeição parcial: um arquivo inválido NÃO interrompe os demais.
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
+  async function handleFiles(files: File[]) {
+    if (files.length === 0 || isUploading) return;
 
     setUploadReport(null);
     setIsUploading(true);
@@ -135,7 +134,6 @@ export default function AlbumDetailPage() {
     ]);
     setUploadReport(report);
     setIsUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   function handleSetCover(photoId: number) {
@@ -171,7 +169,7 @@ export default function AlbumDetailPage() {
               ]
             : []
         }
-        onBack={() => router.push('/comunidade/albuns')}
+        onBack={() => router.push('/albuns')}
       />
 
       {isEditing && canManageAlbums && (
@@ -193,31 +191,9 @@ export default function AlbumDetailPage() {
       )}
 
       <div className="mt-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">
-            Fotos {photosLoading ? '' : `(${photos.length})`}
-          </h2>
-          {canManageAlbums && (
-            <>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
-              >
-                <Upload size={14} />
-                {isUploading ? 'Enviando...' : 'Adicionar fotos'}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                hidden
-                onChange={handleFileChange}
-              />
-            </>
-          )}
-        </div>
+        <h2 className="mb-4 text-sm font-semibold text-gray-700">
+          Fotos {photosLoading ? '' : `(${photos.length})`}
+        </h2>
 
         {actionError && (
           <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</div>
@@ -247,7 +223,7 @@ export default function AlbumDetailPage() {
 
         {photosLoading && <p className="text-sm text-gray-400">Carregando fotos...</p>}
         {!photosLoading && photos.length === 0 && (
-          <p className="text-sm text-gray-400">Nenhuma foto neste álbum ainda.</p>
+          <p className="mb-6 text-sm text-gray-400">Nenhuma foto neste álbum ainda.</p>
         )}
 
         <div className="grid grid-cols-4 gap-4">
@@ -287,6 +263,20 @@ export default function AlbumDetailPage() {
             </div>
           ))}
         </div>
+
+        {canManageAlbums && !photosLoading && (
+          <div className="mt-6 max-w-lg">
+            <ImageInput
+              label="Adicionar fotos"
+              multiple
+              onFiles={handleFiles}
+              accept={ALLOWED_TYPES.join(',')}
+              helperText="JPEG, PNG ou WEBP, de até 5 MB."
+              disabled={isUploading}
+            />
+            {isUploading && <p className="mt-2 text-sm text-gray-500">Enviando fotos...</p>}
+          </div>
+        )}
       </div>
     </>
   );

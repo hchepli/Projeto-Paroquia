@@ -6,15 +6,18 @@ import { useRouter } from 'next/navigation';
 import TextInput from '@/components/ui/inputs/TextInput';
 import TextareaInput from '@/components/ui/inputs/TextareaInput';
 import SelectInput from '@/components/ui/inputs/SelectInput';
+import ImageInput from '@/components/ui/inputs/ImageInput';
 import FormActions from '@/components/ui/buttons/FormActions';
 import { useAnnouncementCategories } from '@/hooks/categories/useCategories';
 import { throwApiError } from '@/lib/errors';
 import {
+  ANNOUNCEMENT_IMAGE_TYPES,
   ANNOUNCEMENT_STATUS_OPTIONS,
   AnnouncementFormValues,
-  buildAnnouncementPayload,
+  buildAnnouncementFormData,
   getAnnouncementSaveError,
   validateAnnouncementForm,
+  validateAnnouncementImage,
 } from '@/lib/announcements/form';
 import { AnnouncementStatus } from '@/types/announcements/announcement';
 
@@ -43,7 +46,7 @@ export default function AnnouncementForm({
   const isEditing = mode === 'edit';
   const fallback = isEditing
     ? 'Não foi possível salvar as alterações. Tente de novo em instantes.'
-    : 'Não foi possível criar o aviso. Tente de novo em instantes.';
+    : 'Não foi possível registrar o aviso. Tente de novo em instantes.';
 
   function set<K extends keyof AnnouncementFormValues>(key: K, value: AnnouncementFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -62,11 +65,13 @@ export default function AnnouncementForm({
 
     setSubmitting(true);
     try {
-      const res = await fetch(isEditing ? `/api/announcements/${announcementId}` : '/api/announcements', {
-        method: isEditing ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildAnnouncementPayload(values, mode)),
-      });
+      const res = await fetch(
+        isEditing ? `/api/announcements/${announcementId}` : '/api/announcements',
+        {
+          method: isEditing ? 'PATCH' : 'POST',
+          body: buildAnnouncementFormData(values, mode), // sem Content-Type: o navegador define
+        },
+      );
       if (!res.ok) await throwApiError(res, fallback);
 
       await queryClient.invalidateQueries({ queryKey: ['announcements'] });
@@ -103,11 +108,15 @@ export default function AnnouncementForm({
         options={(categories ?? []).map((c) => ({ value: String(c.id), label: c.name }))}
       />
 
-      <TextInput
-        label="Endereço da imagem (opcional)"
-        value={values.imageUrl}
-        onChange={(v) => set('imageUrl', v)}
-        placeholder="https://..."
+      <ImageInput
+        label="Imagem (opcional)"
+        file={values.imageFile}
+        onChange={(file) => setValues((prev) => ({ ...prev, imageFile: file, removeImage: false }))}
+        accept={ANNOUNCEMENT_IMAGE_TYPES.join(',')}
+        validate={validateAnnouncementImage}
+        helperText="JPEG, PNG ou WEBP, de até 5 MB."
+        existingUrl={values.removeImage ? null : values.currentImageUrl}
+        onRemoveExisting={() => set('removeImage', true)}
       />
 
       <SelectInput
@@ -127,7 +136,7 @@ export default function AnnouncementForm({
 
       <FormActions
         onCancel={() => router.push(backPath)}
-        submitLabel={isEditing ? 'Salvar' : 'Criar aviso'}
+        submitLabel={isEditing ? 'Salvar' : 'Registrar aviso'}
         submitting={submitting}
       />
     </form>

@@ -85,10 +85,10 @@ export default function AlbunsPage() {
   ];
 
   const actions: GenericTableAction<Album>[] = [
-    { label: 'Ver fotos', onClick: (a) => router.push(`/comunidade/albuns/${a.id}`) },
+    { label: 'Ver fotos', onClick: (a) => router.push(`/albuns/${a.id}`) },
     ...(canManageAlbums
       ? [
-          { label: 'Editar', onClick: (a: Album) => router.push(`/comunidade/albuns/${a.id}?edit=1`) },
+          { label: 'Editar', onClick: (a: Album) => router.push(`/albuns/${a.id}?edit=1`) },
           {
             label: 'Remover',
             onClick: handleRemove,
@@ -106,7 +106,7 @@ export default function AlbunsPage() {
         description="Gerencie os álbuns de fotos da paróquia."
         actions={
           canManageAlbums
-            ? [{ label: 'Novo Álbum', onClick: () => router.push('/comunidade/albuns/registrar') }]
+            ? [{ label: 'Novo Álbum', onClick: () => router.push('/albuns/registrar') }]
             : []
         }
         onBack={() => router.back()}

@@ -28,7 +28,7 @@ export default function CriarAlbumPage() {
         description: values.description || undefined,
         eventId: values.eventId ? Number(values.eventId) : undefined,
       });
-      router.push(`/comunidade/albuns/${album.id}`);
+      router.push(`/albuns/${album.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar álbum.');
     }
@@ -48,7 +48,7 @@ export default function CriarAlbumPage() {
           submitting={createAlbum.isPending}
           error={error}
           onSubmit={handleSubmit}
-          onCancel={() => router.push('/comunidade/albuns')}
+          onCancel={() => router.push('/albuns')}
         />
       </div>
     </>
