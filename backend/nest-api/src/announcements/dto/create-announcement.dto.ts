@@ -6,7 +6,6 @@ import {
   IsOptional,
   IsEnum,
   IsInt,
-  IsUrl,
   MaxLength,
   Matches,
 } from 'class-validator';
@@ -14,6 +13,13 @@ import { AnnouncementStatus } from '../../../generated/prisma/client';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
+
+// Multipart manda tudo como texto: '' ou 'null' limpam a categoria; número em texto vira número.
+const toNullableInt = ({ value }: { value: unknown }) => {
+  if (value === '' || value === 'null') return null;
+  if (typeof value === 'string') return Number(value);
+  return value;
+};
 
 export class CreateAnnouncementDto {
   @ApiProperty({ example: 'Nova reunião da paróquia', maxLength: 180 })
@@ -51,23 +57,14 @@ export class CreateAnnouncementDto {
   status?: AnnouncementStatus;
 
   @ApiPropertyOptional({
-    description: 'Categoria do tipo ANNOUNCEMENT. null limpa a categoria no PATCH.',
+    description: 'Categoria do tipo ANNOUNCEMENT. null (ou vazio no multipart) limpa no PATCH.',
     nullable: true,
   })
+  @Transform(toNullableInt)
   @IsInt()
-  @IsOptional() // IsOptional aceita undefined E null
+  @IsOptional() // aceita undefined e null
   categoryId?: number | null;
 
-  @ApiPropertyOptional({
-    description: 'URL https da imagem (Cloudinary). null remove a imagem no PATCH.',
-    example: 'https://res.cloudinary.com/.../imagem.jpg',
-    maxLength: 255,
-    nullable: true,
-  })
-  @IsUrl({ protocols: ['https'], require_protocol: true })
-  @MaxLength(255)
-  @IsOptional()
-  imageUrl?: string | null;
-
+  // A imagem NÃO é campo do DTO: chega como arquivo "image" (multipart).
   // authorId NÃO entra no body: vem de req.user.userId (RF001).
 }

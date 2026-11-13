@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
@@ -12,6 +13,16 @@ import { Announcement, Prisma } from '../../generated/prisma/client';
 import { generateSlug } from '../common/utils/slug.util';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
+import { StorageService } from '../storage/storage.service';
+
+export interface UploadedFileLike {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+  size?: number;
+}
+
+const IMAGE_FOLDER = 'announcements';
 
 // Público: nunca expõe authorId; lista não traz o content inteiro.
 const publicListSelect = {
@@ -46,9 +57,34 @@ function isUniqueViolation(error: unknown): boolean {
 
 @Injectable()
 export class AnnouncementsService {
-  constructor(private readonly prismaService: PrismaService) {}
+  private readonly logger = new Logger(AnnouncementsService.name);
+
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly storageService: StorageService,
+  ) {}
 
   // ---------- helpers ----------
+
+  private async uploadImage(file: UploadedFileLike): Promise<string> {
+    // O StorageService valida o CONTEÚDO (RNF008): 400 se não for imagem válida.
+    return this.storageService.uploadFile(
+      file.buffer,
+      IMAGE_FOLDER,
+      file.originalname,
+      file.mimetype,
+    );
+  }
+
+  // Apaga do storage sem derrubar a request; se falhar, loga para limpeza manual.
+  private async discardImage(url: string, announcementId?: number) {
+    await this.storageService.deleteFile(url).catch((e) =>
+      this.logger.error(
+        `ORPHAN_FILE announcement=${announcementId ?? '-'} url=${url}`,
+        e instanceof Error ? e.stack : String(e),
+      ),
+    );
+  }
 
   private buildOrderBy(query: PaginationQueryDto) {
     const sortBy = ALLOWED_SORT_FIELDS.includes(query.sortBy as any)
@@ -74,9 +110,7 @@ export class AnnouncementsService {
       where: { id: categoryId },
     });
     if (!category || category.type !== 'ANNOUNCEMENT') {
-      throw new BadRequestException(
-        'Categoria inválida para comunicados',
-      );
+      throw new BadRequestException('Categoria inválida para comunicados');
     }
   }
 
@@ -95,15 +129,35 @@ export class AnnouncementsService {
 
   // ---------- escrita ----------
 
-  async create(dto: CreateAnnouncementDto, authorId: string) {
+  async create(
+    dto: CreateAnnouncementDto,
+    authorId: string,
+    file?: UploadedFileLike,
+  ) {
+    await this.assertAnnouncementCategory(dto.categoryId);
+
+    // Sobe a imagem só depois de validar o resto; se o banco falhar, desfaz o upload.
+    const imageUrl = file ? await this.uploadImage(file) : null;
+    try {
+      return await this.createRecord(dto, authorId, imageUrl);
+    } catch (error) {
+      if (imageUrl) await this.discardImage(imageUrl);
+      throw error;
+    }
+  }
+
+  private async createRecord(
+    dto: CreateAnnouncementDto,
+    authorId: string,
+    imageUrl: string | null,
+  ) {
     const { slug, ...rest } = dto;
-    await this.assertAnnouncementCategory(rest.categoryId);
 
     // Slug explícito: conflito é erro do usuário (409)
     if (slug) {
       try {
         return await this.prismaService.announcement.create({
-          data: { ...rest, slug, authorId },
+          data: { ...rest, slug, authorId, imageUrl },
         });
       } catch (error) {
         if (isUniqueViolation(error)) {
@@ -120,7 +174,7 @@ export class AnnouncementsService {
       const finalSlug = await this.nextFreeSlug(base);
       try {
         return await this.prismaService.announcement.create({
-          data: { ...rest, slug: finalSlug, authorId },
+          data: { ...rest, slug: finalSlug, authorId, imageUrl },
         });
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
@@ -131,26 +185,53 @@ export class AnnouncementsService {
     );
   }
 
-  async update(id: number, dto: UpdateAnnouncementDto) {
-    await this.findOneAdmin(id);
+  async update(
+    id: number,
+    dto: UpdateAnnouncementDto,
+    file?: UploadedFileLike,
+  ) {
+    const existing = await this.findOneAdmin(id);
     await this.assertAnnouncementCategory(dto.categoryId);
+
+    const { removeImage, ...data } = dto;
+    const newUrl = file ? await this.uploadImage(file) : null;
+
+    // Arquivo novo vence; senão, removeImage limpa; senão, não mexe na imagem.
+    const imageData = newUrl
+      ? { imageUrl: newUrl }
+      : removeImage
+        ? { imageUrl: null }
+        : {};
+
+    let updated;
     try {
       // Slug não muda ao editar o título (URLs públicas estáveis, RNF014)
-      return await this.prismaService.announcement.update({
+      updated = await this.prismaService.announcement.update({
         where: { id },
-        data: dto,
+        data: { ...data, ...imageData },
       });
     } catch (error) {
+      if (newUrl) await this.discardImage(newUrl, id);
       if (isUniqueViolation(error)) {
         throw new ConflictException('Já existe um comunicado com esse slug');
       }
       throw error;
     }
+
+    // Trocou ou removeu: apaga o arquivo antigo (depois de o banco confirmar).
+    if ((newUrl || removeImage) && existing.imageUrl) {
+      await this.discardImage(existing.imageUrl, id);
+    }
+    return updated;
   }
 
   async remove(id: number) {
-    await this.findOneAdmin(id);
-    return await this.prismaService.announcement.delete({ where: { id } });
+    const existing = await this.findOneAdmin(id);
+    const deleted = await this.prismaService.announcement.delete({
+      where: { id },
+    });
+    if (existing.imageUrl) await this.discardImage(existing.imageUrl, id);
+    return deleted;
   }
 
   // ---------- leitura pública (só PUBLISHED) ----------
