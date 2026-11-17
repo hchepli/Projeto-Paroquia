@@ -1,7 +1,8 @@
-// src/app/api/sacraments/reorder/route.ts
-import { NextRequest } from 'next/server';
-import { proxyToBackend } from '@/lib/sacraments/backend';
+import { NextRequest, NextResponse } from 'next/server';
+import { proxyToApi } from '@/lib/api-proxy';
 
 export async function PATCH(req: NextRequest) {
-  return proxyToBackend('/sacraments/reorder', { method: 'PATCH', body: await req.text() });
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
+  return proxyToApi('/sacraments/reorder', { method: 'PATCH', body });
 }

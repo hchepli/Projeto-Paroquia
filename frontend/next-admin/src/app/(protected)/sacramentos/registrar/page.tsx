@@ -1,23 +1,29 @@
-// src/app/(protected)/sacramentos/registrar/page.tsx
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import SacramentFormFields from '@/components/ui/forms/SacramentFormFields';
 import FormActions from '@/components/ui/buttons/FormActions';
 import { useCreateSacrament } from '@/hooks/sacraments/useCreateSacrament';
 import { usePermissions } from '@/hooks/auth/usePermissions';
+import { getSacramentSaveError } from '@/lib/sacraments/errors';
 import {
   buildSacramentPayload,
   EMPTY_SACRAMENT_FORM,
-  getSacramentSaveError,
   SacramentFormValues,
   validateSacramentForm,
 } from '@/lib/sacraments/form';
 
-export default function CriarSacramentoPage() {
+function safeBackPath(value: string | null, fallback: string) {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : fallback;
+}
+
+function CriarSacramentoContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const backTo = safeBackPath(searchParams.get('voltar'), '/sacramentos');
+
   const { canManageSacraments, isLoading: permLoading } = usePermissions();
   const createSacrament = useCreateSacrament();
 
@@ -39,22 +45,23 @@ export default function CriarSacramentoPage() {
     }
 
     try {
-      // Sem displayOrder: o back coloca no final da lista.
+      // Sem posição: o back coloca no final da lista.
       await createSacrament.mutateAsync(buildSacramentPayload(values, 'create'));
-      router.push('/sacramentos');
+      router.push(backTo);
     } catch (err) {
-      setError(getSacramentSaveError(err, 'Erro ao criar sacramento.'));
+      setError(getSacramentSaveError(err));
     }
   }
 
-  if (permLoading) return <p className="mt-8 text-sm text-gray-400">Carregando...</p>;
+  if (permLoading) return <p className="mt-8 text-base text-gray-500">Carregando...</p>;
 
   if (!canManageSacraments) {
     return (
       <>
-        <Header title="Novo Sacramento" description="" onBack={() => router.back()} />
-        <p className="mt-8 text-sm text-gray-600">
-          Você não tem permissão para criar sacramentos. Somente Admin Geral e Secretaria.
+        <Header title="Novo sacramento" description="" onBack={() => router.push(backTo)} />
+        <p role="alert" className="mt-8 text-base text-gray-700">
+          Você não pode criar sacramentos. Apenas o Admin Geral e a Secretaria podem. Volte para a
+          lista para ver os sacramentos.
         </p>
       </>
     );
@@ -63,24 +70,34 @@ export default function CriarSacramentoPage() {
   return (
     <>
       <Header
-        title="Novo Sacramento"
-        description="Cadastre um novo sacramento. Ele entra no final da lista."
-        onBack={() => router.back()}
+        title="Novo sacramento"
+        description="Preencha os dados. Ele entra no final da lista e depois você pode mudar a posição."
+        onBack={() => router.push(backTo)}
       />
 
-      <div className="max-w-2xl py-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <SacramentFormFields values={values} onChange={handleChange} />
+      <form onSubmit={handleSubmit} className="space-y-6 py-6">
+        <SacramentFormFields values={values} onChange={handleChange} />
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-base text-red-700">
+            {error}
+          </p>
+        )}
 
-          <FormActions
-            onCancel={() => router.push('/sacramentos')}
-            submitLabel="Criar Sacramento"
-            submitting={createSacrament.isPending}
-          />
-        </form>
-      </div>
+        <FormActions
+          onCancel={() => router.push(backTo)}
+          submitLabel="Criar sacramento"
+          submitting={createSacrament.isPending}
+        />
+      </form>
     </>
+  );
+}
+
+export default function CriarSacramentoPage() {
+  return (
+    <Suspense fallback={<p className="mt-8 text-base text-gray-500">Carregando...</p>}>
+      <CriarSacramentoContent />
+    </Suspense>
   );
 }

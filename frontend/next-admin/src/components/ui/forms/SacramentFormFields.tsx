@@ -1,4 +1,3 @@
-// src/components/ui/forms/SacramentFormFields.tsx
 'use client';
 
 import { SACRAMENT_LIMITS, SacramentFormValues } from '@/lib/sacraments/form';
@@ -10,10 +9,10 @@ interface Props {
 }
 
 const inputClass =
-  'w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-gray-900 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500';
+  'w-full rounded-md border border-gray-300 px-3 py-2 text-base text-gray-800 focus:border-gray-900 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500';
+const labelClass = 'mb-1 block text-base font-medium text-gray-700';
 
-// RNF006: tudo aqui é texto controlado pelo React (escapado por padrão).
-// NUNCA renderizar estes campos com dangerouslySetInnerHTML.
+// RNF006: texto controlado pelo React (escapado). NUNCA usar dangerouslySetInnerHTML aqui.
 export default function SacramentFormFields({ values, onChange, readOnly = false }: Props) {
   const L = SACRAMENT_LIMITS;
 
@@ -30,7 +29,7 @@ export default function SacramentFormFields({ values, onChange, readOnly = false
   return (
     <div className="space-y-5">
       <div>
-        <label htmlFor="sac-name" className="mb-1 block text-sm font-medium text-gray-700">
+        <label htmlFor="sac-name" className={labelClass}>
           Nome *
         </label>
         <input
@@ -45,25 +44,7 @@ export default function SacramentFormFields({ values, onChange, readOnly = false
       </div>
 
       <div>
-        <label htmlFor="sac-slug" className="mb-1 block text-sm font-medium text-gray-700">
-          Slug (endereço no site)
-        </label>
-        <input
-          id="sac-slug"
-          className={inputClass}
-          value={values.slug}
-          maxLength={L.slug}
-          disabled={readOnly}
-          onChange={(e) => onChange({ slug: e.target.value.toLowerCase() })}
-          placeholder="Deixe em branco para gerar a partir do nome"
-        />
-        <p className="mt-1 text-xs text-gray-500">
-          Só letras minúsculas, números e hífens. Alterar muda o link público do sacramento.
-        </p>
-      </div>
-
-      <div>
-        <label htmlFor="sac-desc" className="mb-1 block text-sm font-medium text-gray-700">
+        <label htmlFor="sac-desc" className={labelClass}>
           Descrição *
         </label>
         <textarea
@@ -78,7 +59,7 @@ export default function SacramentFormFields({ values, onChange, readOnly = false
       </div>
 
       <div>
-        <label htmlFor="sac-docs" className="mb-1 block text-sm font-medium text-gray-700">
+        <label htmlFor="sac-docs" className={labelClass}>
           Documentos necessários
         </label>
         <textarea
@@ -94,38 +75,43 @@ export default function SacramentFormFields({ values, onChange, readOnly = false
       </div>
 
       <fieldset className="space-y-3">
-        <legend className="mb-1 text-sm font-medium text-gray-700">Perguntas frequentes</legend>
+        <legend className={labelClass}>Perguntas frequentes</legend>
 
         {values.faq.length === 0 && (
-          <p className="text-sm text-gray-500">Nenhuma pergunta cadastrada.</p>
+          <p className="text-base text-gray-500">Nenhuma pergunta cadastrada.</p>
         )}
 
         {values.faq.map((item, index) => (
           <div key={index} className="space-y-2 rounded-md border border-gray-200 p-3">
+            <label htmlFor={`sac-q-${index}`} className="block text-sm font-medium text-gray-600">
+              Pergunta {index + 1}
+            </label>
             <input
-              aria-label={`Pergunta ${index + 1}`}
+              id={`sac-q-${index}`}
               className={inputClass}
               value={item.question}
               maxLength={L.question}
               disabled={readOnly}
               onChange={(e) => updateFaq(index, { question: e.target.value })}
-              placeholder="Pergunta"
             />
+            <label htmlFor={`sac-a-${index}`} className="block text-sm font-medium text-gray-600">
+              Resposta {index + 1}
+            </label>
             <textarea
-              aria-label={`Resposta ${index + 1}`}
+              id={`sac-a-${index}`}
               rows={2}
               className={inputClass}
               value={item.answer}
               maxLength={L.answer}
               disabled={readOnly}
               onChange={(e) => updateFaq(index, { answer: e.target.value })}
-              placeholder="Resposta"
             />
             {!readOnly && (
               <button
                 type="button"
                 onClick={() => removeFaq(index)}
-                className="text-xs font-medium text-red-600 hover:underline"
+                aria-label={`Remover pergunta ${index + 1}`}
+                className="text-sm font-medium text-red-600 hover:underline"
               >
                 Remover pergunta
               </button>
@@ -137,7 +123,7 @@ export default function SacramentFormFields({ values, onChange, readOnly = false
           <button
             type="button"
             onClick={addFaq}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50"
           >
             + Adicionar pergunta
           </button>

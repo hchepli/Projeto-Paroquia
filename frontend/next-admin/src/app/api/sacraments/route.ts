@@ -1,11 +1,12 @@
-// src/app/api/sacraments/route.ts
-import { NextRequest } from 'next/server';
-import { proxyToBackend } from '@/lib/sacraments/backend';
+import { NextRequest, NextResponse } from 'next/server';
+import { proxyToApi } from '@/lib/api-proxy';
 
 export async function GET() {
-  return proxyToBackend('/sacraments', { auth: false });
+  return proxyToApi('/sacraments', { requireAuth: false });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyToBackend('/sacraments', { method: 'POST', body: await req.text() });
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
+  return proxyToApi('/sacraments', { method: 'POST', body });
 }
