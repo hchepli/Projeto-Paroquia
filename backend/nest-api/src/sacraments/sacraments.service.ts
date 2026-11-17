@@ -19,6 +19,12 @@ export class SacramentsService {
   async create(dto: CreateSacramentDto) {
     const { slug, displayOrder, faq, ...rest } = dto;
     const finalSlug = slug?.trim() || generateSlug(rest.name);
+    // Nome só com símbolos (ex.: "???") gera slug vazio, o que quebraria o link público.
+    if (!finalSlug) {
+      throw new BadRequestException(
+        'O nome precisa ter pelo menos uma letra ou número para gerar o endereço no site',
+      );
+    }
     const order = displayOrder ?? (await this.nextDisplayOrder());
 
     try {
