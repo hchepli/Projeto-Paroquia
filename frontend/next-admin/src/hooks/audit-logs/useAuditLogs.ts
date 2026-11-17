@@ -7,6 +7,8 @@ export interface UseAuditLogsParams {
   limit?: number;
   entity?: string;
   action?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 interface AuditLogsResult {

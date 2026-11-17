@@ -1,4 +1,3 @@
-// src/app/api/users/[id]/route.ts
 import { NextRequest } from 'next/server';
 import { proxyToApi } from '@/lib/api-proxy';
 

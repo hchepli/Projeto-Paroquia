@@ -1,21 +1,14 @@
-// src/types/users/user.ts
-export type UserStatus = 'ATIVO' | 'INATIVO';
+export type UserStatus = 'ACTIVE' | 'INACTIVE';
 
 export interface User {
-  id: string; // UUID
+  id: string;
   name: string;
   email: string;
   status: UserStatus;
   roleId: number;
-  role?: {
-    id: number;
-    name: string;
-  };
+  role?: { id: number; name: string };
   pastoralGroupId: number | null;
-  pastoralGroup?: {
-    id: number;
-    name: string;
-  } | null;
+  pastoralGroup?: { id: number; name: string } | null;
   createdAt: string;
   updatedAt: string;
 }

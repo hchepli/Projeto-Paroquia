@@ -37,3 +37,17 @@ export function useUpdateUser(id: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
 }
+
+export function useChangePassword(id: string) {
+  return useMutation({
+    mutationFn: async (newPassword: string) => {
+      const res = await fetch(`/api/users/${encodeURIComponent(id)}/password`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword }),
+      });
+      if (!res.ok) throw await parseApiError(res, 'Erro ao trocar a senha.');
+      return res.json();
+    },
+  });
+}
