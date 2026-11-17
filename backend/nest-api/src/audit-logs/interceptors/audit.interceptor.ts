@@ -43,6 +43,11 @@ const PII_KEYS = new Set([
 
 const REDACTED = '[REDACTED]';
 
+// Rótulo curto do item para a tela "Últimas alterações".
+const LABEL_KEYS = ['name', 'title', 'nome', 'titulo'];
+// Entidades cujo "name" é nome de pessoa (LGPD, RNF007): não gravam rótulo.
+const NO_LABEL_ENTITIES = new Set(['User', 'Volunteer']);
+
 export function sanitize(value: any): any {
   if (Array.isArray(value)) return value.map(sanitize);
   if (value && typeof value === 'object' && !(value instanceof Date)) {
@@ -55,6 +60,24 @@ export function sanitize(value: any): any {
     return out;
   }
   return value;
+}
+
+function pickLabel(data: any): string | undefined {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
+  for (const key of LABEL_KEYS) {
+    const v = data[key];
+    if (typeof v === 'string' && v.trim()) return v.trim().slice(0, 120);
+  }
+  return undefined;
+}
+
+function resolveLabel(
+  entity: string,
+  response: any,
+  previousData: any,
+): string | undefined {
+  if (NO_LABEL_ENTITIES.has(entity)) return undefined;
+  return pickLabel(response) ?? pickLabel(previousData);
 }
 
 // Ação padrão pelo método HTTP; o decorator pode sobrescrever (ex: POST de sub-rota = UPDATE).
@@ -182,6 +205,7 @@ export class AuditInterceptor implements NestInterceptor {
         action,
         entity,
         entityId,
+        label: resolveLabel(entity, response, previousData),
         previousData: previousData ? sanitize(previousData) : undefined,
         newData:
           action === 'DELETE' || !response ? undefined : sanitize(response),

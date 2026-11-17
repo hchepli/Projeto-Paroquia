@@ -427,6 +427,7 @@ model AuditLog {
   action       AuditAction @map("acao")
   entity       String      @map("entidade") @db.VarChar(80)
   entityId     String      @map("entidade_id") @db.VarChar(36)
+  label        String?     @map("rotulo") @db.VarChar(120) // nome curto do item (ex: título da missa); logs antigos ficam null
   previousData Json?       @map("dados_anteriores")
   newData      Json?       @map("dados_novos")
   createdAt    DateTime    @default(now()) @map("created_at")

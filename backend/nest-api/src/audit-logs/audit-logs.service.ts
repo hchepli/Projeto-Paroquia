@@ -5,12 +5,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 
 // Lista resumida: SEM previousData/newData (JSONs pesados e com dados pessoais).
+// "label" é só um nome curto do item (ex: título da missa).
 const LIST_SELECT = {
   id: true,
   userId: true,
   action: true,
   entity: true,
   entityId: true,
+  label: true,
   createdAt: true,
   user: { select: { name: true } },
 } satisfies Prisma.AuditLogSelect;

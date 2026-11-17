@@ -50,6 +50,16 @@ export class CreateAuditLogDto {
   entityId!: string;
 
   @ApiPropertyOptional({
+    description: 'Nome curto do item afetado (ex: título da missa)',
+    example: 'Missa das 10h',
+    maxLength: 120,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  label?: string;
+
+  @ApiPropertyOptional({
     description: 'Dados anteriores à ação (JSON)',
     example: { name: 'Categoria de Teste', type: 'EVENT' },
   })
