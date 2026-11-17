@@ -1,9 +1,11 @@
-// src/app/comunidade/albuns/page.tsx
+// src/app/albuns/page.tsx
 'use client';
 
 import { useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, FolderOpen, Images, Link2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { FolderOpen, Link2, Link2Off } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/ui/cards/Card';
 import GenericTable, { GenericTableColumn, GenericTableAction } from '@/components/ui/tables/GenericTable';
@@ -11,50 +13,84 @@ import PaginationControls from '@/components/ui/buttons/PaginationControls';
 import { useAlbums } from '@/hooks/albums/useAlbums';
 import { useDeleteAlbum } from '@/hooks/albums/useDeleteAlbum';
 import { usePermissions } from '@/hooks/auth/usePermissions';
+import { useDebouncedValue } from '@/hooks/ui/useDebouncedValue';
+import { getAlbumDeleteError, getAlbumLoadError } from '@/lib/albums/errors';
 import { Album } from '@/types/albums/album';
+import { canShowImage } from '@/lib/albums/upload';
 
 const PAGE_SIZE = 10;
+type Filter = 'all' | 'linked' | 'standalone';
 
 export default function AlbunsPage() {
   const router = useRouter();
-  const { canManageAlbums } = usePermissions();
-  // A lista já vem com photoCount/coverUrl/eventName (1 query no back).
-  const { data: albums = [], isLoading, isError, error } = useAlbums();
+  const queryClient = useQueryClient();
+  const { canManageAlbums, isLoading: permsLoading } = usePermissions();
+  // O back devolve a lista inteira já com photoCount/coverUrl/eventName.
+  const { data: albums = [], isLoading, isError, error, refetch } = useAlbums();
   const deleteAlbum = useDeleteAlbum();
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [filter, setFilter] = useState<Filter>('all');
   const [page, setPage] = useState(1);
-  const [showEmpty, setShowEmpty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const emptyAlbums = useMemo(() => albums.filter((a) => (a.photoCount ?? 0) === 0), [albums]);
-  const totalPhotos = albums.reduce((sum, a) => sum + (a.photoCount ?? 0), 0);
-  const linkedToEventCount = albums.filter((a) => a.eventId !== null).length;
+  const linkedCount = albums.filter((a) => a.eventId !== null).length;
+  const standaloneCount = albums.length - linkedCount;
 
-  const filteredAlbums = useMemo(() => {
-    const base = showEmpty ? emptyAlbums : albums;
-    if (!search) return base;
-    return base.filter((a) => a.title.toLowerCase().includes(search.toLowerCase()));
-  }, [albums, emptyAlbums, showEmpty, search]);
+  const filtered = useMemo(() => {
+    const term = debouncedSearch.trim().toLowerCase();
+    return albums.filter((a) => {
+      const matchesFilter =
+        filter === 'all' || (filter === 'linked' ? a.eventId !== null : a.eventId === null);
+      return matchesFilter && (!term || a.title.toLowerCase().includes(term));
+    });
+  }, [albums, filter, debouncedSearch]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredAlbums.length / PAGE_SIZE));
-  const paginatedAlbums = filteredAlbums.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  function toggleFilter(next: Filter) {
+    setFilter((prev) => (prev === next ? 'all' : next));
+    setPage(1);
+  }
 
   function handleRemove(album: Album) {
     const count = album.photoCount ?? 0;
     const confirmed = window.confirm(
       count > 0
-        ? `Remover o álbum "${album.title}" também removerá ${count} foto(s) vinculada(s). Confirmar?`
-        : `Remover o álbum "${album.title}"?`,
+        ? `Apagar o álbum "${album.title}"? As ${count} fotos dele também serão apagadas. Isso não pode ser desfeito.`
+        : `Apagar o álbum "${album.title}"? Isso não pode ser desfeito.`,
     );
     if (!confirmed) return;
     setActionError(null);
     deleteAlbum.mutate(album.id, {
-      onError: (err) => setActionError(err instanceof Error ? err.message : 'Erro ao remover álbum.'),
+      onError: (err) => {
+        setActionError(getAlbumDeleteError(err));
+        // 404 = já foi removido por outra pessoa: atualiza a lista.
+        queryClient.invalidateQueries({ queryKey: ['albums'] });
+      },
     });
   }
 
   const columns: GenericTableColumn<Album>[] = [
+    {
+      key: 'cover',
+      label: 'Capa',
+      render: (a) =>
+        canShowImage(a.coverUrl) ? (
+          <Image
+            src={a.coverUrl}
+            alt={`Capa do álbum ${a.title}`}
+            width={40}
+            height={40}
+            className="h-10 w-10 rounded object-cover"
+          />
+        ) : (
+          <span className="text-xs text-gray-400">—</span>
+        ),
+    },
     {
       key: 'title',
       label: 'Título',
@@ -62,95 +98,126 @@ export default function AlbunsPage() {
     },
     {
       key: 'event',
-      label: 'Evento vinculado',
-      render: (a) => (a.eventId ? (a.eventName ?? `Evento #${a.eventId}`) : 'Avulso'),
+      label: 'Evento',
+      render: (a) => (a.eventId ? (a.eventName ?? 'Evento ligado') : 'Sem evento'),
     },
-    { key: 'photos', label: 'Fotos', render: (a) => a.photoCount ?? 0 },
     {
-      key: 'cover',
-      label: 'Capa',
+      key: 'photos',
+      label: 'Fotos',
       render: (a) =>
-        a.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={a.coverUrl}
-            alt={`Capa do álbum ${a.title}`}
-            loading="lazy"
-            className="h-8 w-8 rounded object-cover"
-          />
+        (a.photoCount ?? 0) === 0 ? (
+          <span className="text-amber-700">Sem fotos</span>
         ) : (
-          <span className="text-xs text-amber-600">Sem fotos</span>
+          a.photoCount
         ),
     },
   ];
 
   const actions: GenericTableAction<Album>[] = [
-    { label: 'Ver fotos', onClick: (a) => router.push(`/albuns/${a.id}`) },
+    {
+      label: 'Ver fotos',
+      onClick: (a) => router.push(`/albuns/${a.id}`),
+      ariaLabel: (a) => `Ver fotos do álbum ${a.title}`,
+    },
     ...(canManageAlbums
       ? [
-          { label: 'Editar', onClick: (a: Album) => router.push(`/albuns/${a.id}?edit=1`) },
+          {
+            label: 'Editar',
+            onClick: (a: Album) => router.push(`/albuns/${a.id}?edit=1`),
+            ariaLabel: (a: Album) => `Editar o álbum ${a.title}`,
+          },
           {
             label: 'Remover',
             onClick: handleRemove,
             variant: 'danger' as const,
             disabled: () => deleteAlbum.isPending,
+            ariaLabel: (a: Album) => `Remover o álbum ${a.title}`,
           },
         ]
       : []),
   ];
 
+  const hasFilterOrSearch = filter !== 'all' || debouncedSearch.trim() !== '';
+  const emptyMessage = hasFilterOrSearch
+    ? 'Nenhum álbum encontrado. Tente outra palavra ou limpe o filtro.'
+    : canManageAlbums
+      ? 'Ainda não há álbuns. Clique em "Novo álbum" para criar o primeiro.'
+      : 'Ainda não há álbuns.';
+
   return (
     <>
       <Header
-        title="Galeria — Álbuns"
-        description="Gerencie os álbuns de fotos da paróquia."
+        title="Álbuns de fotos"
+        description="Veja e organize as fotos da paróquia."
         actions={
-          canManageAlbums
-            ? [{ label: 'Novo Álbum', onClick: () => router.push('/albuns/registrar') }]
+          !permsLoading && canManageAlbums
+            ? [{ label: 'Novo álbum', onClick: () => router.push('/albuns/registrar') }]
             : []
         }
         onBack={() => router.back()}
       />
 
-      <div className="mt-8 grid grid-cols-4 gap-4">
-        <Card icon={FolderOpen} title="Álbuns" value={albums.length} />
-        <Card icon={Images} title="Fotos" value={totalPhotos} />
-        <Card icon={Link2} title="Vinculados a Evento" value={linkedToEventCount} />
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card
-          icon={AlertCircle}
-          title="Sem fotos"
-          value={emptyAlbums.length}
+          icon={FolderOpen}
+          title="Todos os álbuns"
+          value={albums.length}
           onClick={() => {
-            setShowEmpty((prev) => !prev);
+            setFilter('all');
             setPage(1);
           }}
-          active={showEmpty}
+          active={filter === 'all'}
+          actionLabel="Ver todos"
+        />
+        <Card
+          icon={Link2}
+          title="Ligados a um evento"
+          value={linkedCount}
+          onClick={() => toggleFilter('linked')}
+          active={filter === 'linked'}
+          actionLabel="Filtrar"
+        />
+        <Card
+          icon={Link2Off}
+          title="Sem evento"
+          value={standaloneCount}
+          onClick={() => toggleFilter('standalone')}
+          active={filter === 'standalone'}
+          actionLabel="Filtrar"
         />
       </div>
 
-      {(isError || actionError) && (
-        <p className="mt-4 text-sm text-red-600">
-          {actionError ?? (error instanceof Error ? error.message : 'Erro ao carregar álbuns.')}
-        </p>
+      {isError && (
+        <div role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {getAlbumLoadError(error)}{' '}
+          <button type="button" onClick={() => refetch()} className="font-medium underline">
+            Tentar de novo
+          </button>
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {actionError}
+        </div>
       )}
 
       <div className="my-6">
         <GenericTable
           columns={columns}
-          items={paginatedAlbums}
+          items={pageItems}
           rowKey={(a) => a.id}
           actions={actions}
-          isLoading={isLoading}
+          isLoading={isLoading || permsLoading}
           loadingMessage="Carregando álbuns..."
-          emptyMessage="Nenhum álbum encontrado."
+          emptyMessage={emptyMessage}
           search={search}
           onSearchChange={(value) => {
             setSearch(value);
             setPage(1);
           }}
-          searchPlaceholder="Buscar por título..."
+          searchPlaceholder="Buscar pelo título..."
         />
-        <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
+        <PaginationControls page={currentPage} totalPages={totalPages} onPageChange={setPage} />
       </div>
     </>
   );

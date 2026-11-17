@@ -19,6 +19,7 @@ import {
   validateEventForm,
 } from '@/lib/events/form';
 import { AdminEvent } from '@/types/events/events';
+import { formatMassLabel } from '@/components/ui/inputs/MassSearchCombobox';
 
 interface EventFormModalProps {
   open: boolean;
@@ -186,6 +187,7 @@ function EventModalForm({
         onChange={handleChange}
         readOnly={readOnly}
         showStatus={Boolean(event) && !readOnly}
+          massLabel={event?.mass ? formatMassLabel(event.mass) : undefined}
       />
 
       {error && (

@@ -13,9 +13,10 @@ import { EventStatus } from '@/types/events/events';
 interface EventFormFieldsProps {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
-  /** Coordenador: tudo desabilitado (fieldset disabled desliga inputs e chips). */
   readOnly?: boolean;
   showStatus?: boolean;
+  /** Rótulo da missa já ligada ao evento (ao editar). Ex: formatMassLabel(event.mass). */
+  massLabel?: string;
 }
 
 const labelClass = 'text-sm font-medium text-gray-800';
@@ -26,6 +27,7 @@ export default function EventFormFields({
   onChange,
   readOnly,
   showStatus,
+  massLabel,
 }: EventFormFieldsProps) {
   const { data: categories, isError: categoriesError } = useEventCategories();
 
@@ -90,7 +92,11 @@ export default function EventFormFields({
             Use só se este evento acontece junto com uma missa. Se não for o caso, deixe em branco.
           </p>
         )}
-        <MassSearchCombobox value={values.massId} onChange={(v) => onChange({ massId: v })} />
+        <MassSearchCombobox
+  value={values.massId}
+  onChange={(v) => onChange({ massId: v })}
+  initialLabel={massLabel}
+/>
       </div>
 
       <div role="group" aria-labelledby="evento-pastorais-label" className="flex flex-col gap-1">

@@ -186,15 +186,22 @@ export default function EscalasPage() {
     return query;
   }
 
-  const scheduleActions: GenericTableAction<Schedule>[] = [
-    { label: 'Ver e editar', onClick: (s) => router.push(`/escalas/${s.id}`) },
-  ];
-  const pendingActions: GenericTableAction<CoverageItem>[] = [
-    {
-      label: 'Escalar',
-      onClick: (c) => router.push(`/escalas/registrar?item=${c.sourceType}:${c.sourceId}`),
-    },
-  ];
+const scheduleActions: GenericTableAction<Schedule>[] = [
+  {
+    label: 'Ver e editar',
+    ariaLabel: (s) =>
+      `Ver e editar a escala de ${s.pastoralGroup?.name ?? 'pastoral'} em ${s.mass?.title ?? s.event?.name ?? 'missa ou evento'}`,
+    onClick: (s) => router.push(`/escalas/${s.id}`),
+  },
+];
+
+const pendingActions: GenericTableAction<CoverageItem>[] = [
+  {
+    label: 'Escalar',
+    ariaLabel: (c) => `Escalar pastorais em ${c.title}`,
+    onClick: (c) => router.push(`/escalas/registrar?item=${c.sourceType}:${c.sourceId}`),
+  },
+];
 
   const coverageTotalPages = Math.max(1, Math.ceil(coverageRows.length / PAGE_SIZE));
   const coveragePage = coverageRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

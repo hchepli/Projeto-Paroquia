@@ -12,6 +12,8 @@ import { eventOptionLabel } from '@/lib/events/form';
 interface EventSearchComboboxProps {
   value: string; // eventId como string, '' = nenhum
   onChange: (eventId: string) => void;
+  /** Texto exibido quando já existe um value vindo de fora (modo edição). */
+  initialLabel?: string;
 }
 
 function formatEventLabel(event: AdminEvent): string {
@@ -23,10 +25,14 @@ function formatEventLabel(event: AdminEvent): string {
   return `${eventOptionLabel(event)}, ${day} às ${time}`;
 }
 
-export default function EventSearchCombobox({ value, onChange }: EventSearchComboboxProps) {
+export default function EventSearchCombobox({
+  value,
+  onChange,
+  initialLabel = '',
+}: EventSearchComboboxProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState('');
+  const [selectedLabel, setSelectedLabel] = useState(initialLabel);
   const ref = useRef<HTMLDivElement>(null);
   useOnClickOutside(ref, () => setOpen(false));
 
@@ -72,6 +78,7 @@ export default function EventSearchCombobox({ value, onChange }: EventSearchComb
           }}
           onFocus={() => setOpen(true)}
           placeholder="Buscar Evento por nome..."
+          aria-label="Buscar evento por nome"
           className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-8 text-sm outline-none focus:border-[#1a4d8f]"
         />
         {showClear && (

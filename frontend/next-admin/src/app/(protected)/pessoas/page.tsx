@@ -88,8 +88,8 @@ export default function PessoasPage() {
 const actions: HeaderAction[] = [
   ...(coordenadorSemPastoral
     ? []
-    : [{ label: 'Cadastrar voluntário', onClick: () => router.push('/voluntario/registrar') }]),
-  ...(canSeeUsers ? [{ label: 'Cadastrar usuário', onClick: () => router.push('/usuarios/registrar') }] : []),
+    : [{ label: 'Cadastrar voluntário', onClick: () => router.push('pessoas/voluntarios/registrar') }]),
+  ...(canSeeUsers ? [{ label: 'Cadastrar usuário', onClick: () => router.push('pessoas/usuarios/registrar') }] : []),
   { label: 'Ver voluntários', kind: 'navigate', onClick: () => router.push('/pessoas/voluntarios') },
   ...(canSeeUsers
     ? [{ label: 'Ver usuários', kind: 'navigate' as const, onClick: () => router.push('/pessoas/usuarios') }]

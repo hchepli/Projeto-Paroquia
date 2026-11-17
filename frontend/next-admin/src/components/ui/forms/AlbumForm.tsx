@@ -4,18 +4,19 @@
 import { useState, FormEvent } from 'react';
 import TextInput from '@/components/ui/inputs/TextInput';
 import TextareaInput from '@/components/ui/inputs/TextareaInput';
-import SelectInput from '@/components/ui/inputs/SelectInput';
+import EventSearchCombobox from '@/components/ui/inputs/EventSearchCombobox';
 import FormActions from '@/components/ui/buttons/FormActions';
 
 export interface AlbumFormValues {
   title: string;
   description: string;
-  eventId: string; // '' = álbum avulso (RN003)
+  eventId: string; // '' = álbum sem evento
 }
 
 interface Props {
   initialValues?: AlbumFormValues;
-  eventOptions: { value: string; label: string }[];
+  /** Nome do evento já ligado (modo edição), para aparecer no campo. */
+  eventLabel?: string;
   submitLabel: string;
   submitting: boolean;
   error?: string | null;
@@ -23,10 +24,9 @@ interface Props {
   onCancel: () => void;
 }
 
-// Formulário compartilhado entre "Novo Álbum" e "Editar Álbum".
 export default function AlbumForm({
   initialValues,
-  eventOptions,
+  eventLabel,
   submitLabel,
   submitting,
   error,
@@ -41,7 +41,7 @@ export default function AlbumForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
-      setLocalError('Título é obrigatório.');
+      setLocalError('Escreva o título do álbum.');
       return;
     }
     setLocalError(null);
@@ -59,15 +59,21 @@ export default function AlbumForm({
         placeholder="Ex: Festa Junina 2026"
         required
       />
-      <TextareaInput label="Descrição" value={description} onChange={setDescription} rows={3} />
-      <SelectInput
-        label="Evento vinculado (opcional)"
-        value={eventId}
-        onChange={setEventId}
-        placeholder="Nenhum (álbum avulso)"
-        options={eventOptions}
-      />
-      {shownError && <p className="text-sm text-red-600">{shownError}</p>}
+      <TextareaInput label="Descrição (opcional)" value={description} onChange={setDescription} rows={3} />
+
+      <div role="group" aria-labelledby="album-event-label">
+        <span id="album-event-label" className="mb-1 block text-sm font-medium text-gray-700">
+          Evento deste álbum (opcional)
+        </span>
+        <EventSearchCombobox value={eventId} onChange={setEventId} initialLabel={eventLabel} />
+        <p className="mt-1 text-xs text-gray-500">Deixe em branco se o álbum não for de um evento.</p>
+      </div>
+
+      {shownError && (
+        <p role="alert" className="text-sm text-red-600">
+          {shownError}
+        </p>
+      )}
       <FormActions onCancel={onCancel} submitLabel={submitLabel} submitting={submitting} />
     </form>
   );

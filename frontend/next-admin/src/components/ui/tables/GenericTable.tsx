@@ -19,6 +19,7 @@ export interface GenericTableAction<T> {
   /** 'default' = pill outline (#701513); 'danger' = pill vermelho. */
   variant?: 'default' | 'danger';
   disabled?: (item: T) => boolean;
+  ariaLabel?: string | ((item: T) => string) | null;
 }
 
 export interface GenericTableFilterOption {
@@ -96,14 +97,14 @@ function TableFilterDropdown({ filter }: { filter: GenericTableFilter }) {
           <div className="max-h-60 overflow-y-auto p-1.5">
             {filter.options.map((option) => {
               const isSelected = option.value === filter.value;
+
               return (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`block w-full whitespace-nowrap rounded-md px-4 py-2 text-left text-sm transition ${
-                    isSelected ? 'bg-gray-100 text-gray-800' : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className={`block w-full whitespace-nowrap rounded-md px-4 py-2 text-left text-sm transition ${isSelected ? 'bg-gray-100 text-gray-800' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   {option.label}
                 </button>
@@ -206,10 +207,14 @@ export default function GenericTable<T>({
                             typeof action.label === 'function' ? action.label(item) : action.label;
                           const isDisabled = action.disabled?.(item) ?? false;
                           const isDanger = action.variant === 'danger';
+                          const rawAria =
+                            typeof action.ariaLabel === 'function' ? action.ariaLabel(item) : action.ariaLabel;
+                          const ariaLabel = rawAria || label; // null/undefined/'' → usa o label (comportamento de antes)
 
                           return (
                             <button
                               key={idx}
+                              type="button"
                               onClick={() => action.onClick(item)}
                               disabled={isDisabled}
                               className={
@@ -217,6 +222,7 @@ export default function GenericTable<T>({
                                   ? 'rounded-full border border-red-600 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50'
                                   : 'rounded-full border border-[#701513] px-3 py-1.5 text-xs font-medium text-[#701513] hover:bg-[#701513]/5 disabled:opacity-50'
                               }
+                              aria-label={ariaLabel}
                             >
                               {label}
                             </button>
