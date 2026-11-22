@@ -10,7 +10,7 @@ import { usePastoralGroups } from '@/hooks/pastoral-groups/usePastoralGroups';
 import { useDeletePastoralGroup } from '@/hooks/pastoral-groups/usePastoralGroupMutations';
 import { PastoralGroup } from '@/types/pastoral-groups/pastoral-group';
 import { ROLE_NAMES } from '@/lib/constants/role-names';
-import { ApiError, errorMessage } from '@/lib/api-error';
+import { ApiError, errorBody, errorMessage } from '@/lib/api-error';
 
 const columns: GenericTableColumn<PastoralGroup>[] = [
   { key: 'name', label: 'Nome', render: (p) => p.name },
@@ -53,14 +53,18 @@ export default function PastoraisPage() {
 
     try {
       await removePastoral(pastoral.id);
-    } catch (err) {
+        } catch (err) {
       // O back BLOQUEIA (409 com blockers) enquanto houver coordenadores, voluntários ou escalas
-      if (err instanceof ApiError && err.status === 409 && err.body?.blockers) {
-        const b = err.body.blockers as Blockers;
+      const blockers =
+        err instanceof ApiError && err.status === 409
+          ? errorBody<{ blockers: Blockers }>(err)?.blockers
+          : undefined;
+
+      if (blockers) {
         const parts: string[] = [];
-        if (b.users) parts.push(plural(b.users, 'coordenador', 'coordenadores'));
-        if (b.volunteers) parts.push(plural(b.volunteers, 'voluntário', 'voluntários'));
-        if (b.schedules) parts.push(plural(b.schedules, 'escala', 'escalas'));
+        if (blockers.users) parts.push(plural(blockers.users, 'coordenador', 'coordenadores'));
+        if (blockers.volunteers) parts.push(plural(blockers.volunteers, 'voluntário', 'voluntários'));
+        if (blockers.schedules) parts.push(plural(blockers.schedules, 'escala', 'escalas'));
         setActionError(
           `Não dá para remover a pastoral ${pastoral.name} porque ela ainda tem: ${parts.join(', ')}. Mude ou remova essas pessoas e escalas primeiro.`,
         );

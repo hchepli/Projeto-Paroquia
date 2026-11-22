@@ -61,7 +61,7 @@ export default function RegistrarVoluntarioPage() {
         email: email.trim() || undefined,
         pastoralGroupId: Number(effectivePastoralId),
       });
-      router.push('/voluntario');
+      router.push('/pessoas/voluntarios');
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setError('Você só pode cadastrar voluntários da sua pastoral.');
@@ -134,7 +134,7 @@ export default function RegistrarVoluntarioPage() {
           )}
 
           <FormActions
-            onCancel={() => router.push('/voluntario')}
+            onCancel={() => router.push('/pessoas/voluntarios')}
             submitLabel="Cadastrar voluntário"
             submitting={createVolunteer.isPending}
           />

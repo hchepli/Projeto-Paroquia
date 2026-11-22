@@ -47,7 +47,7 @@ export default function MassDeleteConfirm({ mass, onCancel, onDeleted }: MassDel
         <>
           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             <p className="font-medium">
-              A missa "{mass.title}" ({when}) possui escalas vinculadas.
+              A missa &ldquo;{mass.title}&rdquo; ({when}) possui escalas vinculadas.
             </p>
             <p className="mt-1">
               Se continuar, as escalas abaixo e todas as suas atribuições serão apagadas.
@@ -100,7 +100,7 @@ export default function MassDeleteConfirm({ mass, onCancel, onDeleted }: MassDel
       ) : (
         <>
           <p className="text-sm text-gray-700">
-            Remover a missa <span className="font-medium">"{mass.title}"</span> ({when})? Esta ação
+            Remover a missa <span className="font-medium">&ldquo;{mass.title}&rdquo;</span> ({when})? Esta ação
             não pode ser desfeita.
           </p>
 

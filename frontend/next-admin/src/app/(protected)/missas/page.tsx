@@ -1,7 +1,7 @@
 // src/app/(admin)/missas/page.tsx
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarCheck, CalendarClock, Church } from 'lucide-react';
 import Header, { HeaderAction } from '@/components/layout/Header';
@@ -48,7 +48,8 @@ export default function MissasPage() {
   const debouncedSearch = useDebouncedValue(search, 300);
 
   // "Agora" é fixado uma vez por filtro/montagem, para a chave da busca não mudar a cada render.
-  const now = useMemo(() => new Date().toISOString(), [periodFilter]);
+const [now, setNow] = useState(() => new Date().toISOString());
+
 
   const periodParams = (period: PeriodFilter) =>
     period === 'UPCOMING'
@@ -74,11 +75,11 @@ export default function MissasPage() {
 
   const items = data?.data ?? [];
 
-  function changePeriodFilter(value: PeriodFilter) {
-    setPeriodFilter(value);
-    setPage(1);
-  }
-
+function changePeriodFilter(value: PeriodFilter) {
+  setPeriodFilter(value);
+  setNow(new Date().toISOString());
+  setPage(1);
+}
   const back = `?voltar=${encodeURIComponent(MISSAS_PATH)}`;
 
 const headerActions: HeaderAction[] = [

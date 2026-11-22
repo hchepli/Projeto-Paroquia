@@ -2,11 +2,16 @@ import type { NextConfig } from 'next';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+// Hosts de imagem separados por vírgula. Ex.: IMAGE_HOSTS=res.cloudinary.com,pub-abc.r2.dev
+const imageHosts = (process.env.IMAGE_HOSTS ?? 'res.cloudinary.com')
+  .split(',')
+  .map((h) => h.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
-      { protocol: 'https', hostname: 'res.cloudinary.com' },
-      // Se o STORAGE_PROVIDER for 'r2', adicione o host do R2_PUBLIC_URL aqui.
+      ...imageHosts.map((hostname) => ({ protocol: 'https' as const, hostname })),
       ...(isDev ? [{ protocol: 'https' as const, hostname: 'placeholder.local' }] : []),
     ],
   },

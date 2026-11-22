@@ -11,7 +11,7 @@ import { useVolunteers } from '@/hooks/volunteers/useVolunteers';
 import { useDeleteVolunteer } from '@/hooks/volunteers/useVolunteerMutations';
 import { Volunteer } from '@/types/volunteers/volunteer';
 import { ROLE_NAMES } from '@/lib/constants/role-names';
-import { ApiError, errorMessage } from '@/lib/api-error';
+import { ApiError, errorBody, errorMessage } from '@/lib/api-error';
 import { VolunteerAssignment, describeAssignments } from '@/lib/volunteer-assignments';
 
 const columns: GenericTableColumn<Volunteer>[] = [
@@ -54,8 +54,13 @@ export default function VoluntariosPage() {
       await removeVolunteer({ id: volunteer.id });
     } catch (err) {
       // UC009: o back responde 409 com as escalas em que a pessoa está e pede confirmação extra
-      if (err instanceof ApiError && err.status === 409 && err.body?.requiresConfirmation) {
-        const all = (err.body.assignments ?? []) as VolunteerAssignment[];
+      const body =
+        err instanceof ApiError && err.status === 409
+          ? errorBody<{ requiresConfirmation: boolean; assignments: VolunteerAssignment[] }>(err)
+          : null;
+
+      if (body?.requiresConfirmation) {
+        const all = body.assignments ?? [];
         const future = all.filter((a) => a.isFuture);
         const pastCount = all.length - future.length;
 

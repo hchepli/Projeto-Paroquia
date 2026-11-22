@@ -84,6 +84,9 @@ export default function Sidebar({
     if (!storageKey) return;
     try {
       const stored = localStorage.getItem(storageKey);
+      // Leitura única do localStorage após hidratar (ler no useState causaria
+      // divergência entre servidor e cliente). Exceção consciente à regra.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored !== null) setCollapsed(stored === '1');
     } catch {
       /* localStorage indisponível: segue com o padrão */

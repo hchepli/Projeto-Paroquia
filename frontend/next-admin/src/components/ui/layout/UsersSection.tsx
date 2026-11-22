@@ -12,7 +12,7 @@ const columns: GenericTableColumn<User>[] = [
   { key: 'email', label: 'E-mail', render: (u) => u.email },
   { key: 'role', label: 'Função', render: (u) => u.role?.name ?? '—' },
   { key: 'pastoral', label: 'Pastoral', render: (u) => u.pastoralGroup?.name ?? '—' },
-  { key: 'status', label: 'Situação', render: (u) => (u.status === 'ATIVO' ? 'Ativo' : 'Desativado') },
+  { key: 'status', label: 'Situação', render: (u) => (u.status === 'ACTIVE' ? 'Ativo' : 'Desativado') },
 ];
 
 interface Props {
@@ -54,7 +54,7 @@ export default function UsersSection({ users, isLoading, error }: Props) {
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Buscar por nome ou e-mail..."
-        actions={[{ label: 'Editar', onClick: (u) => router.push(`/usuarios/${u.id}/editar`) }]}
+        actions={[{ label: 'Editar', onClick: (u) => router.push(`/pessoas/usuarios/${u.id}?edit=1`) }]}
       />
     </section>
   );

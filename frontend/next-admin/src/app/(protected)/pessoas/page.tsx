@@ -63,13 +63,13 @@ export default function PessoasPage() {
     }));
     const usrs: PersonRow[] = canSeeUsers
       ? users.map((u) => ({
-          key: `u-${u.id}`,
-          id: u.id,
-          kind: 'USUARIO',
-          name: u.name,
-          contact: u.email,
-          pastoral: u.pastoralGroup?.name ?? '—',
-        }))
+        key: `u-${u.id}`,
+        id: u.id,
+        kind: 'USUARIO',
+        name: u.name,
+        contact: u.email,
+        pastoral: u.pastoralGroup?.name ?? '—',
+      }))
       : [];
 
     const term = search.trim().toLowerCase();
@@ -83,18 +83,18 @@ export default function PessoasPage() {
   if (!currentUser) return <p className="mt-8 text-base text-red-600">Sua sessão acabou. Entre de novo.</p>;
 
   const pastoraisComVoluntarios = new Set(volunteers.map((v) => v.pastoralGroupId)).size;
-  const usuariosAtivos = users.filter((u) => u.status === 'ATIVO').length;
+  const usuariosAtivos = users.filter((u) => u.status === 'ACTIVE').length;
 
-const actions: HeaderAction[] = [
-  ...(coordenadorSemPastoral
-    ? []
-    : [{ label: 'Cadastrar voluntário', onClick: () => router.push('pessoas/voluntarios/registrar') }]),
-  ...(canSeeUsers ? [{ label: 'Cadastrar usuário', onClick: () => router.push('pessoas/usuarios/registrar') }] : []),
-  { label: 'Ver voluntários', kind: 'navigate', onClick: () => router.push('/pessoas/voluntarios') },
-  ...(canSeeUsers
-    ? [{ label: 'Ver usuários', kind: 'navigate' as const, onClick: () => router.push('/pessoas/usuarios') }]
-    : []),
-];
+  const actions: HeaderAction[] = [
+    ...(coordenadorSemPastoral
+      ? []
+      : [{ label: 'Cadastrar voluntário', onClick: () => router.push('/pessoas/voluntarios/registrar') }]),
+    ...(canSeeUsers ? [{ label: 'Cadastrar usuário', onClick: () => router.push('/pessoas/usuarios/registrar') }] : []),
+    { label: 'Ver voluntários', kind: 'navigate', onClick: () => router.push('/pessoas/voluntarios') },
+    ...(canSeeUsers
+      ? [{ label: 'Ver usuários', kind: 'navigate' as const, onClick: () => router.push('/pessoas/usuarios') }]
+      : []),
+  ];
 
   const loadError = volError ?? usersError;
   const emptyMessage = coordenadorSemPastoral
@@ -172,25 +172,29 @@ const actions: HeaderAction[] = [
           filters={
             canSeeUsers
               ? [
-                  {
-                    key: 'kind',
-                    placeholder: 'Todos',
-                    value: kindFilter,
-                    onChange: setKindFilter,
-                    options: [
-                      { value: '', label: 'Todos' },
-                      { value: 'VOLUNTARIO', label: 'Só voluntários' },
-                      { value: 'USUARIO', label: 'Só usuários' },
-                    ],
-                  },
-                ]
+                {
+                  key: 'kind',
+                  placeholder: 'Todos',
+                  value: kindFilter,
+                  onChange: setKindFilter,
+                  options: [
+                    { value: '', label: 'Todos' },
+                    { value: 'VOLUNTARIO', label: 'Só voluntários' },
+                    { value: 'USUARIO', label: 'Só usuários' },
+                  ],
+                },
+              ]
               : undefined
           }
           actions={[
             {
               label: 'Editar',
               onClick: (r) =>
-                router.push(r.kind === 'VOLUNTARIO' ? `/voluntario/${r.id}/editar` : `/usuarios/${r.id}/editar`),
+                router.push(
+                  r.kind === 'VOLUNTARIO'
+                    ? `/pessoas/voluntarios/${r.id}/editar`
+                    : `/pessoas/usuarios/${r.id}`,
+                )
             },
           ]}
         />

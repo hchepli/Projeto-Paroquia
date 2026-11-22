@@ -13,7 +13,7 @@ import { usePastoralGroups } from '@/hooks/pastoral-groups/usePastoralGroups';
 import { useVolunteer } from '@/hooks/volunteers/useVolunteer';
 import { useUpdateVolunteer } from '@/hooks/volunteers/useVolunteerMutations';
 import { ROLE_NAMES } from '@/lib/constants/role-names';
-import { ApiError, errorMessage } from '@/lib/api-error';
+import { ApiError, errorBody, errorMessage } from '@/lib/api-error';
 import { formatPhone, isValidPhone, onlyDigits } from '@/lib/phone-mask';
 import { VolunteerAssignment, describeAssignments } from '@/lib/volunteer-assignments';
 import { Volunteer } from '@/types/volunteers/volunteer';
@@ -88,17 +88,20 @@ function EditarVoluntarioConteudo({
         // Coordenador nunca muda a pastoral (RN006): nem envia o campo
         ...(isCoordenador ? {} : { pastoralGroupId: Number(pastoralId) }),
       });
-      router.push('/voluntario');
+      router.push('/pessoas/voluntarios');
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setError('Você só pode mexer em voluntários da sua pastoral.');
         return;
       }
       // 409: voluntário em escalas futuras, não pode trocar de pastoral
-      if (err instanceof ApiError && err.status === 409 && Array.isArray(err.body?.assignments)) {
-        const list = err.body.assignments as VolunteerAssignment[];
+      const assignments =
+        err instanceof ApiError && err.status === 409
+          ? errorBody<{ assignments: VolunteerAssignment[] }>(err)?.assignments
+          : undefined;
+      if (Array.isArray(assignments)) {
         setError(
-          `Não dá para mudar a pastoral enquanto a pessoa estiver em escalas que ainda vão acontecer. Tire ${volunteer.name} destas escalas primeiro:\n\n${describeAssignments(list)}`,
+          `Não dá para mudar a pastoral enquanto a pessoa estiver em escalas que ainda vão acontecer. Tire ${volunteer.name} destas escalas primeiro:\n\n${describeAssignments(assignments)}`,
         );
         return;
       }
@@ -153,7 +156,7 @@ function EditarVoluntarioConteudo({
           )}
 
           <FormActions
-            onCancel={() => router.push('/voluntario')}
+            onCancel={() => router.push('/pessoas/voluntarios')}
             submitLabel="Salvar alterações"
             submitting={updateVolunteer.isPending}
           />
