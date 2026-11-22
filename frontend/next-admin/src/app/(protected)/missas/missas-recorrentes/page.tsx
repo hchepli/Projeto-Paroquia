@@ -183,7 +183,7 @@ export default function MissasRecorrentesPage() {
             {!isLoading && !isError && (!templates || templates.length === 0) && (
               <tr>
                 <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
-                  Nenhuma missa recorrente cadastrada. Clique em "Adicionar Missa".
+                  Nenhuma missa recorrente cadastrada. Clique em &ldquo;Adicionar Missa&rdquo;.
                 </td>
               </tr>
             )}
@@ -301,7 +301,7 @@ export default function MissasRecorrentesPage() {
       >
         <div className="flex flex-col gap-4">
           <p className="text-sm text-gray-700">
-            Desativar <span className="font-medium">"{deactivating?.title}"</span> impede que novas
+            Desativar <span className="font-medium">&ldquo;{deactivating?.title}&rdquo;</span> impede que novas
             ocorrências sejam geradas.
           </p>
 

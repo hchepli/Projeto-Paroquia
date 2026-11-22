@@ -76,7 +76,10 @@ function RegistrarEscalaForm() {
   const { data: coverage = [], isLoading: coverageLoading, error: coverageError } = useCoverage(range);
   const { data: pastoralGroups = [], isLoading: pastoralsLoading } = usePastoralGroups();
 
-  const [linkType, setLinkType] = useState<LinkType>('MASS');
+  // MUDOU: o tipo inicial vem da URL (?item=EVENT:5), sem precisar de effect
+  const [linkType, setLinkType] = useState<LinkType>(() =>
+    initialItem?.split(':')[0] === 'EVENT' ? 'EVENT' : 'MASS',
+  );
   const [selectedKey, setSelectedKey] = useState(''); // "MASS:12"
   const [pastoralId, setPastoralId] = useState<number | null>(null);
   const [rows, setRows] = useState<AssignmentRow[]>([makeRow()]);
@@ -128,13 +131,15 @@ function RegistrarEscalaForm() {
   }
 
   // Atalho "Escalar" da lista: /escalas/registrar?item=MASS:12
+  // MUDOU: não chama mais setLinkType (o tipo já foi definido no useState acima)
+  // Pré-seleciona UMA vez, quando os dados assíncronos terminam de carregar.
   useEffect(() => {
     if (prefilled.current || !initialItem || userLoading || coverageLoading || pastoralsLoading) return;
     prefilled.current = true;
     const [type] = initialItem.split(':');
     if (type !== 'MASS' && type !== 'EVENT') return;
-    setLinkType(type);
     if (coverage.some((c) => `${c.sourceType}:${c.sourceId}` === initialItem)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       handleSelectSource(initialItem);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

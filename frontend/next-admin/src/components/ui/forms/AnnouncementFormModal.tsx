@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/ui/modals/Modal';
 import { Announcement } from '@/types/announcements/announcement';
@@ -20,32 +20,34 @@ export default function AnnouncementFormModal({
   onClose,
   announcement,
 }: AnnouncementFormModalProps) {
+  const isEditing = Boolean(announcement);
+  return (
+    <Modal open={open} onClose={onClose} title={isEditing ? 'Editar Comunicado' : 'Novo Comunicado'}>
+      {open && <AnnouncementForm announcement={announcement} onClose={onClose} />}
+    </Modal>
+  );
+}
+
+function AnnouncementForm({
+  announcement,
+  onClose,
+}: {
+  announcement?: Announcement;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const isEditing = Boolean(announcement);
-const { data: categories } = useAnnouncementCategories();
+  const { data: categories } = useAnnouncementCategories();
 
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('PUBLISHED');
-  const [imageUrl, setImageUrl] = useState('');
+  const [title, setTitle] = useState(announcement?.title ?? '');
+  const [content, setContent] = useState(announcement?.content ?? '');
+  const [categoryId, setCategoryId] = useState(
+    announcement?.categoryId ? String(announcement.categoryId) : '',
+  );
+  const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>(announcement?.status ?? 'PUBLISHED');
+  const [imageUrl, setImageUrl] = useState(announcement?.imageUrl ?? '');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setTitle(announcement?.title ?? '');
-    setContent(announcement?.content ?? '');
-    setCategoryId(announcement?.categoryId ? String(announcement.categoryId) : '');
-    setStatus(announcement?.status ?? 'PUBLISHED');
-    setImageUrl(announcement?.imageUrl ?? '');
-    setError(null);
-  }, [open, announcement]);
-
-  function handleClose() {
-    setError(null);
-    onClose();
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -80,7 +82,7 @@ const { data: categories } = useAnnouncementCategories();
       }
 
       await queryClient.invalidateQueries({ queryKey: ['announcements'] });
-      handleClose();
+      onClose();
     } catch (err) {
       setError(
         err instanceof Error
@@ -93,8 +95,7 @@ const { data: categories } = useAnnouncementCategories();
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title={isEditing ? 'Editar Comunicado' : 'Novo Comunicado'}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label className="text-[13px] font-medium text-gray-700">Título</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
@@ -149,7 +150,7 @@ const { data: categories } = useAnnouncementCategories();
         <div className="mt-2 flex justify-end gap-2">
           <button
             type="button"
-            onClick={handleClose}
+            onClick={onClose}
             className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200"
           >
             Cancelar
@@ -163,6 +164,5 @@ const { data: categories } = useAnnouncementCategories();
           </button>
         </div>
       </form>
-    </Modal>
   );
 }

@@ -11,6 +11,10 @@ export interface UseAuditLogsParams {
   endDate?: string;
 }
 
+export interface UseAuditLogsOptions {
+  enabled?: boolean;
+}
+
 interface AuditLogsResult {
   data: AuditLog[];
   total: number;
@@ -30,15 +34,19 @@ async function fetchAuditLogs(params: UseAuditLogsParams): Promise<AuditLogsResu
     return { data: [], total: 0, forbidden: true };
   }
 
-  if (!res.ok) await throwApiError(res, 'Erro ao buscar movimentações.');
+  if (!res.ok) await throwApiError(res, 'Erro ao buscar as alterações.');
 
   const page: AuditLogsPage = await res.json();
   return { data: page.data, total: page.total, forbidden: false };
 }
 
-export function useAuditLogs(params: UseAuditLogsParams = {}) {
+export function useAuditLogs(
+  params: UseAuditLogsParams = {},
+  options: UseAuditLogsOptions = {},
+) {
   return useQuery({
     queryKey: ['audit-logs', params],
     queryFn: () => fetchAuditLogs(params),
+    enabled: options.enabled ?? true,
   });
 }
