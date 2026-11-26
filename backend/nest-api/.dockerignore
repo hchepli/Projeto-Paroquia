@@ -1,0 +1,29 @@
+# Dependências e saídas de build (são refeitas dentro da imagem)
+node_modules
+dist
+generated
+coverage
+
+# Segredos: NUNCA entram na imagem
+.env
+.env.*
+!.env.example
+
+# Git e ferramentas
+.git
+.gitignore
+.claude
+.windsurf
+.agents
+.vscode
+.idea
+
+# Docker (não precisam estar dentro da imagem)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Testes e lixo
+test
+*.log
+npm-debug.log*
