@@ -1,14 +1,13 @@
 import { NextRequest } from 'next/server';
-import { proxyToApi } from '@/lib/api-proxy';
+import { invalidId, proxyRequest } from '@/lib/api-proxy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
+async function handle(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  return proxyToApi(`/schedules/${encodeURIComponent(id)}`);
+  const bad = invalidId(id);
+  if (bad) return bad;
+  return proxyRequest(req, `/schedules/${id}`);
 }
 
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToApi(`/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
+export { handle as GET, handle as DELETE };

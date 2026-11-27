@@ -1,8 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { proxyToApi } from '@/lib/api-proxy';
+import { NextRequest } from 'next/server';
+import { proxyRequest } from '@/lib/api-proxy';
 
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  if (!body) return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-  return proxyToApi('/schedule-assignment', { method: 'POST', body });
+export async function POST(req: NextRequest) {
+  return proxyRequest(req, '/schedule-assignment');
 }

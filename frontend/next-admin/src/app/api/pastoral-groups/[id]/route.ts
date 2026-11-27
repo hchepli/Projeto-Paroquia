@@ -1,20 +1,15 @@
-// src/app/api/pastoral-groups/[id]/route.ts
 import { NextRequest } from 'next/server';
-import { proxyToApi } from '@/lib/api-proxy';
+import { invalidId, proxyRequest } from '@/lib/api-proxy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
+async function handle(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  return proxyToApi(`/pastoral-groups/internal/${encodeURIComponent(id)}`);
+  const bad = invalidId(id);
+  if (bad) return bad;
+  // GET usa a rota interna (com defaultRole); PATCH/DELETE a rota normal.
+  const path = req.method === 'GET' ? `/pastoral-groups/internal/${id}` : `/pastoral-groups/${id}`;
+  return proxyRequest(req, path);
 }
 
-export async function PATCH(request: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToApi(`/pastoral-groups/${encodeURIComponent(id)}`, { method: 'PATCH', body: await request.json() });
-}
-
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToApi(`/pastoral-groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
+export { handle as GET, handle as PATCH, handle as DELETE };

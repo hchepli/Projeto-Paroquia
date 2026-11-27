@@ -7,6 +7,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { API_ROUTES } from '@/config/routes';
 import { resolveRoleKey, type RoleKey } from '@/config/roles';
+import { ApiError } from '@/lib/errors';
 
 export type CurrentUser = {
   id: string;
@@ -24,7 +25,9 @@ export type CurrentUser = {
 
 async function fetchCurrentUser(): Promise<CurrentUser | null> {
   const res = await fetch(API_ROUTES.me);
-  if (res.status === 401) return null; // sessão inválida: o middleware cuida do redirecionamento
+  if (res.status === 401) {
+    throw new ApiError('Sua sessão terminou. Entre de novo.', 401, { code: 'SESSION_EXPIRED' });
+  }
   if (!res.ok) throw new Error('Serviço indisponível.');
 
   const data = await res.json();
@@ -49,6 +52,5 @@ export function useCurrentUser() {
     queryKey: ['auth', 'me'],
     queryFn: fetchCurrentUser,
     staleTime: 5 * 60 * 1000,
-    retry: 1,
   });
 }

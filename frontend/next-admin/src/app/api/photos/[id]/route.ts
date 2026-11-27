@@ -1,55 +1,13 @@
-// src/app/api/photos/[id]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { apiFetch } from '@/lib/api';
+import { NextRequest } from 'next/server';
+import { invalidId, proxyRequest } from '@/lib/api-proxy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function PATCH(req: NextRequest, { params }: Ctx) {
+async function handle(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
-  const body = await req.json().catch(() => null);
-  if (!body) {
-    return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-  }
-
-  const backendRes = await apiFetch(`/photos/${id}`, {
-    token,
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  });
-
-  const data = await backendRes.json().catch(() => null);
-
-  if (!backendRes.ok) {
-    return NextResponse.json(
-      { message: data?.message ?? 'Erro ao atualizar foto.' },
-      { status: backendRes.status },
-    );
-  }
-
-  return NextResponse.json(data);
+  const bad = invalidId(id);
+  if (bad) return bad;
+  return proxyRequest(req, `/photos/${id}`);
 }
 
-export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
-  const backendRes = await apiFetch(`/photos/${id}`, { token, method: 'DELETE' });
-
-  if (!backendRes.ok) {
-    const errorBody = await backendRes.json().catch(() => null);
-    return NextResponse.json(
-      { message: errorBody?.message ?? 'Erro ao remover foto.' },
-      { status: backendRes.status },
-    );
-  }
-
-  return new NextResponse(null, { status: 204 });
-}
+export { handle as PATCH, handle as DELETE };

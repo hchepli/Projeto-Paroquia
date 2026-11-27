@@ -5,14 +5,21 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import LogoIgreja from '@/assets/img/logo/logo-igreja.svg';
 
+const SESSION_MESSAGE = 'Sua sessão terminou. Entre de novo.';
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() =>
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('motivo') === 'sessao'
+      ? SESSION_MESSAGE
+      : '',
+  );
   const [loading, setLoading] = useState(false);
 
-    async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -73,7 +80,6 @@ export default function LoginPage() {
 
       {/* Conteúdo: texto à esquerda, card à direita */}
       <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center gap-14 px-6 py-12 lg:flex-row lg:items-center lg:justify-between lg:px-16">
-        {/* Logo + texto — só sobre o fundo, sem painel próprio */}
         <div className="flex max-w-md flex-col items-start text-left">
           <Image src={LogoIgreja} alt="Logo da paróquia" className="h-24" priority />
 
@@ -86,12 +92,11 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Card com corte diagonal, estilo do wireframe de referência */}
+        {/* Card com corte diagonal */}
         <div
           className="w-full max-w-sm border border-white/15 bg-white/10 px-8 pb-10 pt-9 shadow-2xl backdrop-blur-xl"
           style={{
-            clipPath:
-              'polygon(0 0, 100% 0, 100% 82%, 88% 100%, 0 100%)',
+            clipPath: 'polygon(0 0, 100% 0, 100% 82%, 88% 100%, 0 100%)',
           }}
         >
           <div className="flex flex-col items-center text-center">
@@ -111,6 +116,7 @@ export default function LoginPage() {
               <input
                 id="email"
                 type="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -126,6 +132,7 @@ export default function LoginPage() {
               <input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -134,11 +141,13 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && (
-              <p role="alert" className="text-sm text-[#ff8783]">
-                {error}
-              </p>
-            )}
+            <p
+              role="alert"
+              suppressHydrationWarning
+              className={error ? 'text-sm text-[#ff8783]' : 'sr-only'}
+            >
+              {error}
+            </p>
 
             <button
               type="submit"

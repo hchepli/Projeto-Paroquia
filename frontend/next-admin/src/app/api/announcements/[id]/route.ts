@@ -1,85 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { apiFetch } from '@/lib/api';
+import { NextRequest } from 'next/server';
+import { invalidId, proxyRequest } from '@/lib/api-proxy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, { params }: Ctx) {
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
   const { id } = await params;
-  const backendRes = await apiFetch(`/announcements/admin/${id}`, { token });
-  const data = await backendRes.json().catch(() => null);
-
-  if (!backendRes.ok) {
-    return NextResponse.json(
-      { message: data?.message ?? 'Erro ao buscar aviso.' },
-      { status: backendRes.status },
-    );
-  }
-  return NextResponse.json(data);
+  const bad = invalidId(id);
+  if (bad) return bad;
+  return proxyRequest(req, `/announcements/admin/${id}`);
 }
 
-export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
+async function write(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const isMultipart = (req.headers.get('content-type') ?? '').includes('multipart/form-data');
-
-  let backendRes: Response;
-  if (isMultipart) {
-    const incomingForm = await req.formData().catch(() => null);
-    if (!incomingForm) {
-      return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-    }
-    backendRes = await apiFetch(`/announcements/${id}`, {
-      token,
-      method: 'PATCH',
-      body: incomingForm,
-    });
-  } else {
-    const body = await req.json().catch(() => null);
-    if (!body) {
-      return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-    }
-    backendRes = await apiFetch(`/announcements/${id}`, {
-      token,
-      method: 'PATCH',
-      body: JSON.stringify(body),
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  const data = await backendRes.json().catch(() => null);
-  if (!backendRes.ok) {
-    return NextResponse.json(
-      { message: data?.message ?? 'Erro ao atualizar aviso.' },
-      { status: backendRes.status },
-    );
-  }
-  return NextResponse.json(data);
+  const bad = invalidId(id);
+  if (bad) return bad;
+  return proxyRequest(req, `/announcements/${id}`);
 }
 
-export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
-  const { id } = await params;
-  const backendRes = await apiFetch(`/announcements/${id}`, { token, method: 'DELETE' });
-  const data = await backendRes.json().catch(() => null);
-
-  if (!backendRes.ok) {
-    return NextResponse.json(
-      { message: data?.message ?? 'Erro ao apagar aviso.' },
-      { status: backendRes.status },
-    );
-  }
-  return NextResponse.json(data ?? { ok: true });
-}
+export { write as PATCH, write as DELETE };

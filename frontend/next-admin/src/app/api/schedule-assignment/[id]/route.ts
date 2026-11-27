@@ -1,16 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { proxyToApi } from '@/lib/api-proxy';
+import { NextRequest } from 'next/server';
+import { invalidId, proxyRequest } from '@/lib/api-proxy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: NextRequest, { params }: Ctx) {
+async function handle(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const body = await request.json().catch(() => null);
-  if (!body) return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-  return proxyToApi(`/schedule-assignment/${encodeURIComponent(id)}`, { method: 'PATCH', body });
+  const bad = invalidId(id);
+  if (bad) return bad;
+  return proxyRequest(req, `/schedule-assignment/${id}`);
 }
 
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToApi(`/schedule-assignment/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
+export { handle as PATCH, handle as DELETE };

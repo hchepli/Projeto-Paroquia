@@ -1,14 +1,13 @@
 import { NextRequest } from 'next/server';
-import { proxyToApi } from '@/lib/api-proxy';
+import { invalidId, proxyRequest } from '@/lib/api-proxy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: NextRequest, { params }: Ctx) {
+async function handle(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  return proxyToApi(`/roles/${encodeURIComponent(id)}`, { method: 'PATCH', body: await request.json() });
+  const bad = invalidId(id);
+  if (bad) return bad;
+  return proxyRequest(req, `/roles/${id}${req.nextUrl.search}`);
 }
 
-export async function DELETE(request: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToApi(`/roles/${encodeURIComponent(id)}${request.nextUrl.search}`, { method: 'DELETE' });
-}
+export { handle as PATCH, handle as DELETE };

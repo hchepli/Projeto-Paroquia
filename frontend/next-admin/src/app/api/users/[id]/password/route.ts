@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server';
-import { proxyToApi } from '@/lib/api-proxy';
+import { invalidId, proxyRequest } from '@/lib/api-proxy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: NextRequest, { params }: Ctx) {
+export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  return proxyToApi(`/users/${encodeURIComponent(id)}/password`, {
-    method: 'PATCH',
-    body: await request.json(),
-  });
+  const bad = invalidId(id);
+  if (bad) return bad;
+  return proxyRequest(req, `/users/${id}/password`, { maxBytes: 4 * 1024 });
 }

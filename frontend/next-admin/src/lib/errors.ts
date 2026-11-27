@@ -6,7 +6,7 @@ export class ApiError extends Error {
   status: number;
   body: unknown;
 
-  
+
 
   constructor(message: string, status: number, body: unknown = null) {
     super(message);
@@ -49,6 +49,9 @@ export function getErrorMessage(err: unknown, fallback = 'Erro inesperado.'): st
 export function getFriendlyErrorMessage(err: unknown, fallback = 'Erro inesperado.'): string {
   if (err instanceof ApiError) {
     if (err.status === 400 || err.status === 409) return err.message || fallback;
+    if (err.status === 503) {
+      return err.message || 'O sistema está fora do ar por um momento. Tente de novo em alguns minutos.';
+    }
     if (err.status >= 500) return 'Erro no servidor. Tente novamente em instantes.';
     return STATUS_MESSAGES[err.status] ?? (err.message || fallback);
   }

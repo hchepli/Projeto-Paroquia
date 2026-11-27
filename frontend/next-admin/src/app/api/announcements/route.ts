@@ -1,51 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { apiFetch } from '@/lib/api';
+import { NextRequest } from 'next/server';
+import { proxyRequest } from '@/lib/api-proxy';
 
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(req.url);
-  const backendRes = await apiFetch(`/announcements/admin?${searchParams.toString()}`, { token });
-
-  if (!backendRes.ok) {
-    const errorBody = await backendRes.json().catch(() => null);
-    return NextResponse.json(
-      { message: errorBody?.message ?? 'Erro ao buscar comunicados.' },
-      { status: backendRes.status },
-    );
-  }
-
-  return NextResponse.json(await backendRes.json());
+  return proxyRequest(req, `/announcements/admin${req.nextUrl.search}`);
 }
 
 export async function POST(req: NextRequest) {
-  const token = req.cookies.get('access_token')?.value;
-  if (!token) {
-    return NextResponse.json({ message: 'Não autenticado.' }, { status: 401 });
-  }
-
-  const incomingForm = await req.formData().catch(() => null);
-  if (!incomingForm) {
-    return NextResponse.json({ message: 'Corpo da requisição inválido.' }, { status: 400 });
-  }
-
-  const backendRes = await apiFetch('/announcements', {
-    token,
-    method: 'POST',
-    body: incomingForm,
-  });
-
-  const data = await backendRes.json().catch(() => null);
-
-  if (!backendRes.ok) {
-    return NextResponse.json(
-      { message: data?.message ?? 'Erro ao criar aviso.' },
-      { status: backendRes.status },
-    );
-  }
-
-  return NextResponse.json(data, { status: backendRes.status });
+  return proxyRequest(req, '/announcements');
 }
