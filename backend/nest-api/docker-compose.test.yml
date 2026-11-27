@@ -1,0 +1,15 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: paroquia
+      POSTGRES_PASSWORD: paroquia
+      POSTGRES_DB: paroquia_test
+    ports:
+      - '127.0.0.1:5433:5432'
+    tmpfs:
+      - /var/lib/postgresql/data   # banco descartável, some ao parar
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U paroquia -d paroquia_test']
+      interval: 2s
+      retries: 20
