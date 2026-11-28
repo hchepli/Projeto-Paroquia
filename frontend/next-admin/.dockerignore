@@ -1,0 +1,40 @@
+# Dependências e saídas de build (refeitas dentro da imagem)
+node_modules
+.next
+out
+coverage
+
+# Segredos: NUNCA entram na imagem
+.env
+.env.*
+!.env.example
+
+# Testes (não fazem parte do build de produção)
+e2e
+playwright-report
+test-results
+playwright.config.*
+vitest.config.*
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Git e ferramentas
+.git
+.gitignore
+.claude
+.windsurf
+.agents
+.vscode
+.idea
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Lixo
+*.log
+npm-debug.log*
+*.tsbuildinfo

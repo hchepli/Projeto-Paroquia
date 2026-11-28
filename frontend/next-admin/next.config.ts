@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+// Lido no BUILD (o standalone serializa esta config). Trocar de storage = rebuild.
 const imageHosts = (process.env.IMAGE_HOSTS ?? 'res.cloudinary.com')
   .split(',')
   .map((h) => h.trim())
@@ -24,6 +25,7 @@ const csp = [
 ].join('; ');
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   poweredByHeader: false,
   images: {
     remotePatterns: [
